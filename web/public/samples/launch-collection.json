@@ -1,0 +1,655 @@
+{
+  "name": "Harbor Foxes",
+  "slug": "hfoxes",
+  "cover": "https://famousfoxes.com/tff/3413.png",
+  "bio": "A series of wormholes have ripped a hole in the spacetime continuum, and thousands of pixelated Foxes from a parallel universe have made their way through.",
+  "website": "https://famousfoxes.com",
+  "twitter": "",
+  "discord": "",
+  "maxSupply": 20,
+  "mintPrice": "1",
+  "royaltyPct": 5,
+  "hideUntilReveal": true,
+  "items": [
+    {
+      "name": "Fox #3413",
+      "image": "https://famousfoxes.com/tff/3413.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Violet"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Flannel Blue"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smile"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Bowler Light"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Eye Patch"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #6082",
+      "image": "https://famousfoxes.com/tff/6082.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Orange"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Camo"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Drool"
+        },
+        {
+          "trait_type": "Head",
+          "value": "COPE"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Wink"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #6922",
+      "image": "https://famousfoxes.com/tff/6922.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Rose"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Turtleneck Green"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Fangs"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        },
+        {
+          "trait_type": "Head Tier",
+          "value": "2"
+        },
+        {
+          "trait_type": "Outfit Tier",
+          "value": "2"
+        },
+        {
+          "trait_type": "Tail",
+          "value": "False"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #4549",
+      "image": "https://famousfoxes.com/tff/4549.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Amaranth"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Flannel Yellow"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smug"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Sportsband"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Synth"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #129",
+      "image": "https://famousfoxes.com/tff/129.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Orange"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Flannel Yellow"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smile"
+        },
+        {
+          "trait_type": "Head",
+          "value": "None"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Scar"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #2856",
+      "image": "https://famousfoxes.com/tff/2856.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Orange"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Red"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Blep"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Bucket Hat Green"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #5533",
+      "image": "https://famousfoxes.com/tff/5533.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Persimmon"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "T-Shirt Dark"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Blep"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Sleepy"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #7396",
+      "image": "https://famousfoxes.com/tff/7396.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Alabaster"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Scarf Purple"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Stache"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Blank"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #1835",
+      "image": "https://famousfoxes.com/tff/1835.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Sky"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Blue"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Grin"
+        },
+        {
+          "trait_type": "Head",
+          "value": "None"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Angry"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #2620",
+      "image": "https://famousfoxes.com/tff/2620.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Green"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Hoodie Light"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smug"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Sportsband"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Scar"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #3019",
+      "image": "https://famousfoxes.com/tff/3019.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Champagne"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Turtleneck Dark"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smug"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Backwards Cap Camo"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Jaded"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #5186",
+      "image": "https://famousfoxes.com/tff/5186.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Champagne"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Turtleneck Orange"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smile"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Safari"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        },
+        {
+          "trait_type": "Outfit Tier",
+          "value": "1"
+        },
+        {
+          "trait_type": "Head Tier",
+          "value": "1"
+        }
+      ],
+      "rarity": "Uncommon"
+    },
+    {
+      "name": "Fox #5276",
+      "image": "https://famousfoxes.com/tff/5276.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Rose"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Tank Top Purple"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Stache"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Backwards Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Jaded"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #3706",
+      "image": "https://famousfoxes.com/tff/3706.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Sky"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Shirt Green"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smile"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Bucket Hat Ivory"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #7076",
+      "image": "https://famousfoxes.com/tff/7076.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Sky"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Scarf Red"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Blep"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Backwards Cap Dark"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #2648",
+      "image": "https://famousfoxes.com/tff/2648.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Persimmon"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "COPE"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Blep"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Bucket Hat Ivory"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Scar"
+        }
+      ],
+      "rarity": "Rare"
+    },
+    {
+      "name": "Fox #7443",
+      "image": "https://famousfoxes.com/tff/7443.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Alabaster"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Sweater Light"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Drool"
+        },
+        {
+          "trait_type": "Head",
+          "value": "None"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Wink"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #2011",
+      "image": "https://famousfoxes.com/tff/2011.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Emerald"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Sweater Green"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smirk"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Jaded"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #6666",
+      "image": "https://famousfoxes.com/tff/6666.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Emerald"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Turtleneck Blue"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smug"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Headband White"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Standard"
+        }
+      ],
+      "rarity": "Common"
+    },
+    {
+      "name": "Fox #770",
+      "image": "https://famousfoxes.com/tff/770.png",
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Alabaster"
+        },
+        {
+          "trait_type": "Outfit",
+          "value": "Sweater Light"
+        },
+        {
+          "trait_type": "Skin",
+          "value": "Natural"
+        },
+        {
+          "trait_type": "Mouth",
+          "value": "Smug"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Cap Pink"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Eye Patch"
+        }
+      ],
+      "rarity": "Common"
+    }
+  ]
+}

@@ -1,0 +1,322 @@
+{
+    "collections":  [
+                        {
+                            "slug":  "taiyo",
+                            "name":  "Taiyo Robotics",
+                            "cover":  "https://cdn.taiyorobotics.com/images/ad2df041d8117a1ca7fb60b461bbb6db.png",
+                            "website":  "https://magiceden.io/marketplace/taiyo_robotics",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  25,
+                            "volumeUgnot":  208769100,
+                            "salesCount":  23,
+                            "topOfferUgnot":  8668852,
+                            "floorPct7d":  18.4,
+                            "items":  [
+                                          {
+                                              "name":  "TYR-1084",
+                                              "image":  "https://cdn.taiyorobotics.com/images/ad2df041d8117a1ca7fb60b461bbb6db.png",
+                                              "listPrice":  11000000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Suraimu;Breastplate:Raiko 01 Zx Rs;Energy-source:Topazu;Shoulder:Kabutomushi V1"
+                                          },
+                                          {
+                                              "name":  "TYR-2238",
+                                              "image":  "https://nftstorage.link/ipfs/bafybeiedry5o2a5hukxozrvipg4xd2hszgexj4ijhhuriijruszrkplo4a/116.png",
+                                              "listPrice":  15500000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Kumo;Back Arms:Kaisha;Body:UVW Z05R;Face Visor:Yuki"
+                                          },
+                                          {
+                                              "name":  "TYR-1061",
+                                              "image":  "https://cdn.taiyorobotics.com/images/0935e01f95c1a0665572a1ee7b551160.png",
+                                              "listPrice":  99000000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Unismo;Breastplate:Geisoro Rm 2;Energy-source:Akuamarin;Shoulder:Difenda 00Z"
+                                          },
+                                          {
+                                              "name":  "TYR-1371",
+                                              "image":  "https://cdn.taiyorobotics.com/images/a3a5f7b2f79668c3ac027849c7a5cc96.png",
+                                              "listPrice":  28500000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Pelegrinaru;Breastplate:Raiko 01 Zx Rs;Energy-source:Akuamarin;Shoulder:Arami Dmg"
+                                          },
+                                          {
+                                              "name":  "TYR-1705",
+                                              "image":  "https://cdn.taiyorobotics.com/images/60367047332214bd026793c4c90d11e0.png",
+                                              "listPrice":  12000000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Pinko;Breastplate:Selix 70;Energy-source:Daiyamondo;Shoulder:Arami Su"
+                                          }
+                                      ]
+                        },
+                        {
+                            "slug":  "tdfox",
+                            "name":  "Transdimensional Fox Federation",
+                            "cover":  "https://famousfoxes.com/tff/3413.png",
+                            "website":  "https://magiceden.io/marketplace/transdimensional_fox_federation",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  258,
+                            "volumeUgnot":  101358640,
+                            "salesCount":  71,
+                            "topOfferUgnot":  1241180,
+                            "floorPct7d":  -1.33,
+                            "items":  [
+                                          {
+                                              "name":  "Fox #3413",
+                                              "image":  "https://famousfoxes.com/tff/3413.png",
+                                              "listPrice":  8000000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Violet;Outfit:Shirt Flannel Blue;Skin:Natural;Mouth:Smile"
+                                          },
+                                          {
+                                              "name":  "Fox #6082",
+                                              "image":  "https://famousfoxes.com/tff/6082.png",
+                                              "listPrice":  9357900,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Orange;Outfit:Shirt Camo;Skin:Natural;Mouth:Drool"
+                                          },
+                                          {
+                                              "name":  "Fox #6922",
+                                              "image":  "https://famousfoxes.com/tff/6922.png",
+                                              "listPrice":  1589000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Rose;Outfit:Turtleneck Green;Skin:Natural;Mouth:Fangs"
+                                          },
+                                          {
+                                              "name":  "Fox #4549",
+                                              "image":  "https://famousfoxes.com/tff/4549.png",
+                                              "listPrice":  1850000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Amaranth;Outfit:Shirt Flannel Yellow;Skin:Natural;Mouth:Smug"
+                                          },
+                                          {
+                                              "name":  "Fox #129",
+                                              "image":  "https://famousfoxes.com/tff/129.png",
+                                              "listPrice":  48000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Orange;Outfit:Shirt Flannel Yellow;Skin:Natural;Mouth:Smile"
+                                          }
+                                      ]
+                        },
+                        {
+                            "slug":  "frogana",
+                            "name":  "Froganas",
+                            "cover":  "https://arweave.net/lf9J0n6P9ik3vtQk6jmTPytfceSk4NcSFSh2AhL1eus?ext=png",
+                            "website":  "https://magiceden.io/marketplace/froganas",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  934,
+                            "volumeUgnot":  69306263,
+                            "salesCount":  32,
+                            "topOfferUgnot":  407805,
+                            "floorPct7d":  -8.62,
+                            "items":  [
+                                          {
+                                              "name":  "Frogana #2096",
+                                              "image":  "https://arweave.net/lf9J0n6P9ik3vtQk6jmTPytfceSk4NcSFSh2AhL1eus?ext=png",
+                                              "listPrice":  2500000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Light Cyan;Body:Lemon Green;Clothes:Dino Doodle T-Shirt;Head:Gold Bullion and White FaceCap"
+                                          },
+                                          {
+                                              "name":  "Frogana #2118",
+                                              "image":  "https://bafybeibzpsalpzzzukvlbqu2jddnkigv4mvgljg2lbsxptnmbsctldy44i.ipfs.nftstorage.link/2118.png?ext=png",
+                                              "listPrice":  7000000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Aero Blue;Body:Spotted Light Brown;Clothes:Jail Suit;Head:Froggo BucketHat"
+                                          },
+                                          {
+                                              "name":  "Frogana #2295",
+                                              "image":  "https://arweave.net/mDzYmd8mcrdHYbd3fwmDiD8QGmFX2H2LRMqIcyJNau4?ext=png",
+                                              "listPrice":  3900000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Light Green;Body:Spotted Light Brown;Clothes:Only Frogs Black T-Shirt;Head:Black Beanie"
+                                          },
+                                          {
+                                              "name":  "Frogana #5305",
+                                              "image":  "https://bafybeiadu3qvjgysnsuwnhaeyx4csuc4fsi4hdkbo3ma4uqoqzzsweqzqa.ipfs.nftstorage.link/5305.png?ext=png",
+                                              "listPrice":  15000000,
+                                              "rarity":  "Uncommon",
+                                              "traits":  "Background:Light Green;Body:Skeleton;Clothes:Ripped Green Frog T-Shirt"
+                                          },
+                                          {
+                                              "name":  "Frogana #5324",
+                                              "image":  "https://arweave.net/1sTAWDUqMKMYm2eG0kgzBA616M0L7M_055jDkUAf_UU?ext=png",
+                                              "listPrice":  97600000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Light Cyan;Body:Mutated;Clothes:Black Casual Collar Varsity Jacket"
+                                          }
+                                      ]
+                        },
+                        {
+                            "slug":  "dape",
+                            "name":  "Degenerate Ape Academy",
+                            "cover":  "https://arweave.net/yC_Dl6YhTEZzV0XZIh7VfxMwVjHbOAJuKojOymdId_g",
+                            "website":  "https://magiceden.io/marketplace/degenerate_ape_academy",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  615,
+                            "volumeUgnot":  13228489,
+                            "salesCount":  8,
+                            "topOfferUgnot":  1422408,
+                            "floorPct7d":  0.47,
+                            "items":  [
+                                          {
+                                              "name":  "Degen Ape #5091",
+                                              "image":  "https://arweave.net/yC_Dl6YhTEZzV0XZIh7VfxMwVjHbOAJuKojOymdId_g",
+                                              "listPrice":  10000000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Blue;Fur / Skin:Albino / Blue;Head:Captain\u0027s Hat;Mouth:Corndog"
+                                          },
+                                          {
+                                              "name":  "Degen Ape HS #8959",
+                                              "image":  "https://a.traiter.xyz/avatar:4ptgzjjxmls5kaphabc7/1759524954670.png",
+                                              "listPrice":  22000000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Green;Fur / Skin:Green / Peach;Head:Wizard\u0027s Hat;Mouth:Ape-le Juice"
+                                          },
+                                          {
+                                              "name":  "Degen Ape #4535",
+                                              "image":  "https://arweave.net/QN_PTR_OftkM_HVKzz_eXrY8c9OR7Xu_LdPGAOU5ywQ",
+                                              "listPrice":  399000000,
+                                              "rarity":  "Rare",
+                                              "traits":  "Background:Green;Fur / Skin:Green / Peach;Head:Conical Hat;Mouth:Soda"
+                                          },
+                                          {
+                                              "name":  "Degen Ape #4252",
+                                              "image":  "https://arweave.net/jhjLukF7c25ZnE2AxG7oKKugooVccgFPDz_c4JnPJ3Y",
+                                              "listPrice":  295000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Blue;Fur / Skin:Blue / Blue;Head:Pharaoh\u0027s Neme;Mouth:Drool"
+                                          },
+                                          {
+                                              "name":  "Degen Ape #3690",
+                                              "image":  "https://arweave.net/gvL6nZ0bvtEWUugydBuQJ2bu-lZsrrCo9dlyt1qjUPE",
+                                              "listPrice":  22000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Yellow;Fur / Skin:Leopard;Head:Umbrella Hat;Mouth:No Traits"
+                                          }
+                                      ]
+                        },
+                        {
+                            "slug":  "y00ts",
+                            "name":  "y00ts",
+                            "cover":  "https://metadata.y00ts.com/y/8919.png",
+                            "website":  "https://magiceden.io/marketplace/y00ts",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  453,
+                            "volumeUgnot":  85391790,
+                            "salesCount":  98,
+                            "topOfferUgnot":  694861,
+                            "floorPct7d":  -7.4,
+                            "items":  [
+                                          {
+                                              "name":  "y00t #8920",
+                                              "image":  "https://metadata.y00ts.com/y/8919.png",
+                                              "listPrice":  5000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Solitary Star;Fur:Bone;Face:Wholesome;Clothes:Nice Overalls"
+                                          },
+                                          {
+                                              "name":  "y00t #4330",
+                                              "image":  "https://metadata.y00ts.com/y/4329.png",
+                                              "listPrice":  10000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Antique White;Fur:Tumbleweed;Face:Chill;Clothes:None"
+                                          },
+                                          {
+                                              "name":  "y00t #12973",
+                                              "image":  "https://metadata.y00ts.com/y/12972.png",
+                                              "listPrice":  2256000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Snow White;Fur:Stone;Face:Smile;Clothes:Banana Puffer"
+                                          },
+                                          {
+                                              "name":  "y00t #6515",
+                                              "image":  "https://metadata.y00ts.com/y/6514.png",
+                                              "listPrice":  5150000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Bit Of Blue;Fur:Sand Dollar;Face:Smirk;Clothes:Blob Suit"
+                                          },
+                                          {
+                                              "name":  "y00t #6008",
+                                              "image":  "https://metadata.y00ts.com/y/6007.png",
+                                              "listPrice":  104000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Bit Of Blue;Fur:Hazel;Face:Wholesome;Clothes:Bear Coat"
+                                          }
+                                      ]
+                        },
+                        {
+                            "slug":  "tensorians",
+                            "name":  "Tensorians",
+                            "cover":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/24f27171-430f-42ca-b442-6a75a8daadad/images/2749.png",
+                            "website":  "https://magiceden.io/marketplace/tensorians",
+                            "twitter":  "",
+                            "discord":  "",
+                            "mintPrice":  0,
+                            "maxSupply":  10000,
+                            "minted":  10000,
+                            "listedCount":  189,
+                            "volumeUgnot":  0,
+                            "salesCount":  0,
+                            "topOfferUgnot":  435000,
+                            "floorPct7d":  -1.91,
+                            "items":  [
+                                          {
+                                              "name":  "Tensorian #3977",
+                                              "image":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/24f27171-430f-42ca-b442-6a75a8daadad/images/2749.png",
+                                              "listPrice":  4500000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Red;Back Accessory:None;Base:Point;Earring:None"
+                                          },
+                                          {
+                                              "name":  "Tensorian #229",
+                                              "image":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/14f27171-430f-42ca-b442-6a75a8daadad/images/304.png",
+                                              "listPrice":  50000000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:White;Back Accessory:None;Base:Base;Earring:Earring - Gold"
+                                          },
+                                          {
+                                              "name":  "Tensorian #4333",
+                                              "image":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/24f27171-430f-42ca-b442-6a75a8daadad/images/4262.png",
+                                              "listPrice":  3200000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:Blue;Back Accessory:None;Base:Flat;Earring:None"
+                                          },
+                                          {
+                                              "name":  "Tensorian #3351",
+                                              "image":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/24f27171-430f-42ca-b442-6a75a8daadad/images/4167.png",
+                                              "listPrice":  2712000,
+                                              "rarity":  "Common",
+                                              "traits":  "Background:White;Back Accessory:None;Base:Flat;Earring:None"
+                                          },
+                                          {
+                                              "name":  "Tensorian #5856",
+                                              "image":  "https://prod-tensor-creators-s3.s3.us-east-1.amazonaws.com/drop-metadata/34f27171-430f-42ca-b442-6a75a8daadad/images/6159.png",
+                                              "listPrice":  30000000,
+                                              "rarity":  "Legendary",
+                                              "traits":  "Background:Purple;Back Accessory:None;Base:Base;Earring:None"
+                                          }
+                                      ]
+                        }
+                    ]
+}

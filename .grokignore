@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env*
+*.log
+web/tmp-*
+gno.land/p/demo/
+gno.land/p/nt/

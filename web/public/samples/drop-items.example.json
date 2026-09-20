@@ -1,0 +1,31 @@
+[
+  {
+    "name": "Dusk Fox #1",
+    "image": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    "attributes": [
+      { "trait_type": "Rarity", "value": "Legendary" },
+      { "trait_type": "Background", "value": "Dusk" },
+      { "trait_type": "Fur", "value": "Ember" }
+    ]
+  },
+  {
+    "name": "Dusk Fox #2",
+    "image": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    "image_url": "https://example.com/do-not-prefer.png",
+    "attributes": [
+      { "trait_type": "Rarity", "value": "Rare" },
+      { "trait_type": "Background", "value": "Night" },
+      { "trait_type": "Fur", "value": "Ash" }
+    ]
+  },
+  {
+    "name": "Dusk Fox #3",
+    "ipfs": "ipfs://bafybeibkqa2enqtnfbx7wrz3t4m4z3q3n2r5s6t7u8v9w0x1y2z3a4b5c",
+    "image": "https://example.com/fallback.png",
+    "attributes": [
+      { "trait_type": "Rarity", "value": "Uncommon" },
+      { "trait_type": "Background", "value": "Moss" },
+      { "trait_type": "Fur", "value": "Pine" }
+    ]
+  }
+]
