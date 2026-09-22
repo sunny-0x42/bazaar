@@ -20,4 +20,4 @@ External GRC721 pull is **not** supported (Gno cannot `TransferFrom` an unknown 
 
 **Not listed on Bazaar Explore.** Bonding-curve launch = gnomi.fun. AMM = Zdex. Frozen `r/bazaar/market` is not the product.
 
-Live Pearl **factory** (one collection = one realm): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factoryv3` (also v2 for older cols). Frozen slug book: `…/bazaar/nftv7`. Independent creators: [listing-external.md](listing-external.md). Adena: [adena-collectables.md](adena-collectables.md).
+Live Pearl **factory** (one collection = one realm): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factoryv3` (also v2 for older cols). Frozen slug book: `…/bazaar/nftv7`. Independent creators: [listing-external.md](listing-external.md), sample realm [col-realm.md](col-realm.md). Adena: [adena-collectables.md](adena-collectables.md).

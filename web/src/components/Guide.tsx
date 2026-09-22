@@ -136,8 +136,15 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
           </li>
         </ol>
         <p className="muted">
-          Full note: listing-external.md in the GitHub repo. Third-party collections that are not this template
-          cannot be imported today.
+          Sample realm + mint-site Adena calls:{" "}
+          <a href="https://github.com/sunny-0x42/bazaar/blob/master/docs/col-realm.md" target="_blank" rel="noreferrer">
+            docs/col-realm.md
+          </a>
+          . Listing overview:{" "}
+          <a href="https://github.com/sunny-0x42/bazaar/blob/master/docs/listing-external.md" target="_blank" rel="noreferrer">
+            listing-external.md
+          </a>
+          . Foreign packages that are not this surface cannot be imported.
         </p>
       </article>
 

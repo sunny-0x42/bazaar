@@ -27,6 +27,7 @@ Faucet: https://pearl.testnets.gno.land/faucet
 
 - [Guide](https://bazaar-gno.vercel.app/#/guide)
 - [List without Launch](docs/listing-external.md)
+- [Collection realm sample (own mint site)](docs/col-realm.md)
 - [Adena collectables](docs/adena-collectables.md)
 
 ## Layout

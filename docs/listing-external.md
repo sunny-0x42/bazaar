@@ -10,13 +10,12 @@ So you do **not** point Bazaar at a random NFT contract. You deploy a **Bazaar-c
 
 ## Path that works today
 
-1. Copy `gno.land/r/bazaar/col` (GRC721 + `List` / `Buy` / `TokenURI`).
+1. Copy the sample realm [`gno.land/r/bazaar/col`](../gno.land/r/bazaar/col/) — or reimplement the same funcs. Full surface, Adena mint calls, and qeval shapes: **[col-realm.md](col-realm.md)**.
 2. `addpkg` under **your** namespace, last path element = package name, e.g. `gno.land/r/<your-g1>/mycol`.
-3. Call `Init` (name, symbol, cover, maxSupply, mintPrice, royaltyBps). Pay factory `LaunchFee` **or** `Reserve` on factoryv3 then Init with empty send if you want the collection on Explore.
-4. Holders (or you) connect Adena on Bazaar → **Sell** → `List` at a GNOT price. Escrow is **your** realm.
-5. Buyers pay exact ugnot on `Buy`. 50 bps protocol + your royalty (0–10%).
-
-You never have to use the Bazaar Launch wizard if you `addpkg` + `Init` yourself.
+3. Host **your own mint page** (`PublicMint` / `Mint` on that pkg). You never have to use the Bazaar Launch wizard.
+4. Call `Init` (name, symbol, cover, maxSupply, mintPrice, royaltyBps). Pay factory `LaunchFee` **or** `Reserve` on factoryv3 then Init with empty send if you want the collection on Explore.
+5. Holders connect Adena on Bazaar → **Sell** → `List` at a GNOT price. Escrow is **your** realm.
+6. Buyers pay exact ugnot on `Buy`. 50 bps protocol + your royalty (0–10%).
 
 ## What does not work
 
