@@ -39,6 +39,7 @@ type Props = {
   collectionItems: Item[] | null;
   collectionActivity: Activity[] | null;
   homeActivity?: Activity[] | null;
+  featuredSlugs?: string[];
   slug: string;
   onSlug: (slug: string) => void;
   query: string;
@@ -85,6 +86,7 @@ export function Explore({
   collectionItems,
   collectionActivity,
   homeActivity,
+  featuredSlugs = [],
   slug,
   onSlug,
   query,
@@ -156,12 +158,14 @@ export function Explore({
     () => buildExploreCollections(catalog, chainCollections, items),
     [catalog, chainCollections, items],
   );
+  const factoryMode = useMemo(() => chainCollections.some((c) => !!c.pkg), [chainCollections]);
 
   const q = query.trim().toLowerCase();
   const visibleCollections = useMemo(() => {
     if (!q) return collections;
     return collections.filter((col) => {
       if (col.name.toLowerCase().includes(q) || col.slug.toLowerCase().includes(q)) return true;
+      if ((col.pkg || "").toLowerCase().includes(q)) return true;
       const cat = catalog.find((c) => c.slug === col.slug);
       return !!cat?.items.some((it) => it.name.toLowerCase().includes(q));
     });
@@ -169,12 +173,14 @@ export function Explore({
 
   const listedPool = useMemo(() => {
     if (items.length > 0) return items.filter((row) => row.listed && row.price > 0);
+    if (factoryMode) return [];
     return catalog.flatMap((col) => previewItemsFor(col).filter((row) => row.listed && row.price > 0));
-  }, [items, catalog]);
+  }, [items, catalog, factoryMode]);
   const tape = useMemo(() => {
     if (homeActivity && homeActivity.length > 0) return homeActivity;
+    if (factoryMode) return [];
     return catalog.flatMap((col) => previewActivityFor(col));
-  }, [homeActivity, catalog]);
+  }, [homeActivity, catalog, factoryMode]);
   const markets = useMemo(() => {
     const map = new Map<string, CollectionMarket>();
     for (const col of collections) {
@@ -182,29 +188,43 @@ export function Explore({
     }
     return map;
   }, [collections, listedPool, tape]);
-  const featured = useMemo(() => pickFeatured(collections, markets, 3), [collections, markets]);
+  const featuredLaunchpads = useMemo(() => {
+    if (featuredSlugs.length === 0) return [];
+    const bySlug = new Map(collections.map((col) => [col.slug, col]));
+    return featuredSlugs.map((s) => bySlug.get(s)).filter((col): col is (typeof collections)[number] => !!col);
+  }, [collections, featuredSlugs]);
+  const featuredCollections = useMemo(() => {
+    return pickFeatured(collections, markets, 4, {
+      exclude: new Set(featuredSlugs),
+      requireVolume: true,
+    });
+  }, [collections, markets, featuredSlugs]);
   const recent = useMemo(() => {
     const source =
       homeActivity && homeActivity.length > 0
         ? homeActivity
         : collectionActivity && collectionActivity.length > 0
           ? collectionActivity
-          : catalog.flatMap((col) => previewActivityFor(col));
+          : factoryMode
+            ? []
+            : catalog.flatMap((col) => previewActivityFor(col));
     const trades = liveTradeRows(source, 24);
     return trades.length > 0 ? trades : null;
-  }, [homeActivity, collectionActivity, catalog]);
+  }, [homeActivity, collectionActivity, catalog, factoryMode]);
   const active = collections.find((c) => c.slug === slug) ?? null;
   const collectionRows = useMemo(() => {
     if (!slug) return [];
-    return itemsForExploreCollection(slug, catalog, items, collectionItems);
-  }, [slug, catalog, items, collectionItems]);
+    const cat = active?.pkg ? [] : catalog;
+    return itemsForExploreCollection(slug, cat, items, collectionItems);
+  }, [slug, catalog, items, collectionItems, active?.pkg]);
 
   const collectionEvents = useMemo(() => {
     if (!slug) return [];
     if (collectionActivity && collectionActivity.length > 0) return collectionActivity;
+    if (active?.pkg) return collectionActivity || [];
     const cat = catalog.find((c) => c.slug === slug);
     return cat ? previewActivityFor(cat) : [];
-  }, [slug, catalog, collectionActivity]);
+  }, [slug, catalog, collectionActivity, active?.pkg]);
 
   const localPoints = useMemo(() => {
     const fromActivity = activityToPoints(collectionEvents.filter((row) => !row.preview));
@@ -321,10 +341,10 @@ export function Explore({
         <>
           <header className="page-head">
             <h1>Explore</h1>
-            <p className="muted">Featured collections. Quote in GNOT or USD from the header.</p>
+            <p className="muted">Live collections. Each has its own realm. Mint in GNOT.</p>
           </header>
 
-          {chainNote ? (
+          {chainNote && !(factoryMode && missing) ? (
             <p className="muted chain-note">
               {missing
                 ? "Realm not on Pearl yet. Showing sample collections."
@@ -339,8 +359,23 @@ export function Explore({
 
           {!showHomeSkeleton && !slug && recent && recent.length > 0 ? <LiveTicker rows={recent} /> : null}
 
-          {!showHomeSkeleton && !q && featured.length > 0 ? (
-            <FeaturedCollections collections={featured} markets={markets} onOpen={onSlug} />
+          {!showHomeSkeleton && !q && featuredLaunchpads.length > 0 ? (
+            <FeaturedCollections
+              title="Featured launchpads"
+              collections={featuredLaunchpads}
+              markets={markets}
+              onOpen={onSlug}
+              onMint={onOpenMint}
+            />
+          ) : null}
+
+          {!showHomeSkeleton && !q && featuredCollections.length > 0 ? (
+            <FeaturedCollections
+              title="Featured collections"
+              collections={featuredCollections}
+              markets={markets}
+              onOpen={onSlug}
+            />
           ) : null}
 
           {!showHomeSkeleton && visibleCollections.length > 0 ? (

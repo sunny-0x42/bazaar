@@ -31,6 +31,9 @@ Do not add investment language, volume claims, or “floor will pump.”
 | `nav.sell` | Sell |
 | `nav.portfolio` | Profile |
 | `nav.settings` | Settings |
+| `nav.admin` | Admin |
+| `nav.guide` | Guide |
+| `guide.listExternal` | List without launching here |
 
 ## Footer
 
@@ -73,8 +76,10 @@ Always visible.
 | Key | Copy |
 | --- | --- |
 | `explore.title` | Explore |
-| `explore.lead` | Featured collections and the market table. Prices in GNOT. |
-| `explore.featured` | Featured |
+| `explore.lead` | Live collections. Each has its own realm. Mint in GNOT. |
+| `explore.featuredLaunchpads` | Featured launchpads |
+| `explore.featuredCollections` | Featured collections |
+| `admin.featured` | Featured launchpads |
 | `explore.collections` | Collections |
 | `explore.empty.title` | No collections |
 | `explore.empty` | Create a drop, then list items at a fixed GNOT price. |
@@ -104,6 +109,7 @@ Collection page (Explore).
 | --- | --- |
 | `launch.title` | Launch |
 | `launch.lead` | Fixed-price collection drops. Mint pays the drop price in GNOT. |
+| `launch.realm` | Each collection is its own realm. Pearl: ask Bazaar to addpkg, then Initialize collection. Local: `/local/new-col` then Initialize collection. |
 | `launch.lead.preview` | Sample drops — preview. Mint pays the drop price in GNOT. |
 | `launch.empty` | No drops yet. Create one below. |
 | `launch.create` | Create drop |
@@ -150,6 +156,8 @@ Collection page (Explore).
 | --- | --- |
 | `settings.title` | Settings |
 | `settings.lead` | After Pearl addpkg, paste the deployed hub and NFT paths. Local gnodev keeps the defaults. |
+| `settings.factory` | Factory package path |
+| `settings.factory.hint` | Optional. Live Launch uses nftv7. Leave empty unless testing per-realm collections locally (gno.land/r/bazaar/factory). |
 | `settings.empty.title` | No NFT path |
 | `settings.empty` | Paste the hub and NFT paths after Pearl addpkg. |
 | `settings.empty.disconnected.title` | Connect Adena |
@@ -157,6 +165,22 @@ Collection page (Explore).
 | `settings.seed` | Seed sample collections |
 | `settings.seed.connect` | Connect Adena to seed |
 | `settings.seed.lead` | On local gnodev after Init, seed three sample collections so Explore is a live book. |
+
+---
+
+## Admin
+
+Header link only when the connected address equals `Admin()`. Not in BottomNav. Direct `#/admin` otherwise shows denied, no controls.
+
+| Key | Copy |
+| --- | --- |
+| `admin.title` | Admin |
+| `admin.lead` | Pick launchpad drops for Explore. Up to 8, in the order you tick. |
+| `admin.featured` | Featured launches |
+| `admin.save` | Save featured |
+| `admin.empty` | No launchpad drops on this book yet. |
+| `admin.denied.title` | Not admin |
+| `admin.denied` | This page is only for the realm admin. |
 
 ---
 

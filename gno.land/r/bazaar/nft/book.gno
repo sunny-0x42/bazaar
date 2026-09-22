@@ -17,14 +17,29 @@ const (
 	nativeDenom = "ugnot"
 )
 
-func takeLaunchFee() {
+func takeExactUgnot(want int64) {
 	sent := unsafe.OriginSend()
-	if len(sent) > 1 {
-		panic("nft: extra denoms")
+	if want == 0 {
+		if len(sent) != 0 {
+			panic("nft: extra denoms")
+		}
+		return
 	}
-	if sent.AmountOf(nativeDenom) != launchFee {
-		panic("nft: launch fee")
+	if len(sent) != 1 || sent[0].Denom != nativeDenom || sent[0].Amount != want {
+		panic("nft: wrong payment")
 	}
+}
+
+func takeOneUgnotPositive() int64 {
+	sent := unsafe.OriginSend()
+	if len(sent) != 1 || sent[0].Denom != nativeDenom || sent[0].Amount <= 0 {
+		panic("nft: wrong payment")
+	}
+	return sent[0].Amount
+}
+
+func takeLaunchFee() {
+	takeExactUgnot(launchFee)
 	fees += launchFee
 }
 
@@ -46,13 +61,7 @@ func PublicMint(cur realm, slug string) int {
 	if col.wlSupply > 0 && col.minted < col.wlSupply {
 		pay = col.wlPrice
 	}
-	sent := unsafe.OriginSend()
-	if len(sent) > 1 {
-		panic("nft: extra denoms")
-	}
-	if sent.AmountOf(nativeDenom) != pay {
-		panic("nft: wrong payment")
-	}
+	takeExactUgnot(pay)
 	n := col.minted + 1
 	name := col.name + " #" + strconv.Itoa(n)
 	image := "/samples/" + slug + "-0" + strconv.Itoa(n) + ".png"
@@ -110,6 +119,7 @@ func List(cur realm, id int, priceUgnot int64) {
 	if it.owner != caller {
 		panic("nft: not owner")
 	}
+	grcTransfer(it.collection, caller, caller, self, id)
 	it.listed = true
 	it.seller = caller
 	it.price = priceUgnot
@@ -143,10 +153,7 @@ func Buy(cur realm, id int) {
 	if !it.listed {
 		panic("nft: not listed")
 	}
-	sent := unsafe.OriginSend().AmountOf(nativeDenom)
-	if sent != it.price {
-		panic("nft: wrong payment")
-	}
+	takeExactUgnot(it.price)
 	fillBuy(cur, caller, id)
 }
 
@@ -175,10 +182,7 @@ func Sweep(cur realm, ids string) {
 		}
 		total += it.price
 	}
-	sent := unsafe.OriginSend().AmountOf(nativeDenom)
-	if sent != total {
-		panic("nft: wrong payment")
-	}
+	takeExactUgnot(total)
 	for _, id := range parsed {
 		fillBuy(cur, caller, id)
 	}
@@ -218,6 +222,7 @@ func fillBuy(cur realm, buyer address, id int) {
 		}
 	}
 	fees += proto
+	grcTransfer(it.collection, self, self, buyer, id)
 	it.listed = false
 	it.owner = buyer
 	it.seller = address("")
@@ -256,6 +261,7 @@ func Cancel(cur realm, id int) {
 	if caller != it.seller {
 		panic("nft: not seller")
 	}
+	grcTransfer(it.collection, self, self, it.seller, id)
 	it.listed = false
 	it.owner = it.seller
 	it.seller = address("")

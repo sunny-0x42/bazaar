@@ -12,6 +12,7 @@ import (
 func resetAll() {
 	items = avl.Tree{}
 	collections = avl.Tree{}
+	symbols = avl.Tree{}
 	acts = avl.Tree{}
 	offers = avl.Tree{}
 	pools = avl.Tree{}
@@ -22,6 +23,7 @@ func resetAll() {
 	mintedBy = avl.Tree{}
 	userProfiles = avl.Tree{}
 	actSeq = 0
+	tokenSeq = 0
 	nextID = 0
 	inited = false
 	seeded = false
@@ -30,6 +32,7 @@ func resetAll() {
 	self = zero
 	fees = 0
 	launchFee = 0
+	featured = ""
 }
 
 func boot(cur realm) {
@@ -1505,6 +1508,141 @@ func TestSetProfile(cur realm, t *testing.T) {
 	}
 	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
 	if revive(func() { SetProfile(cross(cur), "X", "", "", "", "", "") }) == nil {
+		t.Fatalf("expected EOA")
+	}
+}
+
+func TestGrc721MintListBuy(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	boot(cur)
+	if GrcName() != "Bazaar" {
+		t.Fatalf("GrcName %q", GrcName())
+	}
+	if GrcSymbol() != "bazaar" {
+		t.Fatalf("GrcSymbol %q", GrcSymbol())
+	}
+	id := Mint(cross(cur), "Sword", "https://example.com/sword.png")
+	if GrcOwnerOf(id) != alice.String() {
+		t.Fatalf("ledger owner after mint %q", GrcOwnerOf(id))
+	}
+	if OwnerOf(id).String() != GrcOwnerOf(id) {
+		t.Fatalf("cache vs ledger after mint")
+	}
+	if TokenURI(id) != "https://example.com/sword.png" {
+		t.Fatalf("TokenURI %q", TokenURI(id))
+	}
+	if GrcBalanceOf(alice.String()) != 1 {
+		t.Fatalf("alice balance %d", GrcBalanceOf(alice.String()))
+	}
+	List(cross(cur), id, 1_000_000)
+	if GrcOwnerOf(id) != self.String() {
+		t.Fatalf("list should move ledger to realm %q", GrcOwnerOf(id))
+	}
+	if OwnerOf(id) != self {
+		t.Fatalf("list cache owner")
+	}
+	if GrcBalanceOf(alice.String()) != 0 {
+		t.Fatalf("alice after list %d", GrcBalanceOf(alice.String()))
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	testing.IssueCoins(self, chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	Buy(cross(cur), id)
+	if GrcOwnerOf(id) != bob.String() {
+		t.Fatalf("buy should restore buyer on ledger %q", GrcOwnerOf(id))
+	}
+	if OwnerOf(id).String() != GrcOwnerOf(id) {
+		t.Fatalf("cache vs ledger after buy")
+	}
+	if GrcBalanceOf(bob.String()) != 1 {
+		t.Fatalf("bob balance %d", GrcBalanceOf(bob.String()))
+	}
+}
+
+func TestGrc721TransferWrongCaller(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	boot(cur)
+	id := Mint(cross(cur), "Sword", "")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	if revive(func() { Transfer(cross(cur), bob, id) }) == nil {
+		t.Fatalf("expected not owner")
+	}
+	if OwnerOf(id) != alice {
+		t.Fatalf("cache owner after wrong transfer")
+	}
+	if GrcOwnerOf(id) != alice.String() {
+		t.Fatalf("ledger owner after wrong transfer %q", GrcOwnerOf(id))
+	}
+}
+
+func TestListNotUserCall(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	boot(cur)
+	id := Mint(cross(cur), "Sword", "")
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
+	if revive(func() { List(cross(cur), id, 1_000_000) }) == nil {
+		t.Fatalf("expected EOA only")
+	}
+	if Listed(id) {
+		t.Fatalf("listed by non-user")
+	}
+	if GrcOwnerOf(id) != alice.String() {
+		t.Fatalf("ledger moved %q", GrcOwnerOf(id))
+	}
+}
+
+func TestGrc721LongSymbol(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	boot(cur)
+	if revive(func() { CreateCollection(cross(cur), "abcdefghijkl", "Too Long", "") }) == nil {
+		t.Fatalf("expected symbol")
+	}
+}
+
+func TestSetFeatured(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	boot(cur)
+	CreateDrop(cross(cur), "gems", "Harbor Gems", "/samples/stones-01.png", 2, 1_000_000)
+	CreateDrop(cross(cur), "kelp", "Kelp Crests", "/samples/lamps-01.png", 2, 1_000_000)
+	CreateCollection(cross(cur), "studio", "Studio", "")
+	SetFeatured(cross(cur), "kelp, gems, kelp")
+	if Featured() != "kelp\ngems" {
+		t.Fatalf("featured %q", Featured())
+	}
+	SetFeatured(cross(cur), "gems\nkelp")
+	if Featured() != "gems\nkelp" {
+		t.Fatalf("newline %q", Featured())
+	}
+	SetFeatured(cross(cur), "")
+	if Featured() != "" {
+		t.Fatalf("clear %q", Featured())
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	if revive(func() { SetFeatured(cross(cur), "gems") }) == nil {
+		t.Fatalf("expected not admin")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	if revive(func() { SetFeatured(cross(cur), "nope") }) == nil {
+		t.Fatalf("expected unknown")
+	}
+	if revive(func() { SetFeatured(cross(cur), "studio") }) == nil {
+		t.Fatalf("expected not a drop")
+	}
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
+	if revive(func() { SetFeatured(cross(cur), "gems") }) == nil {
 		t.Fatalf("expected EOA")
 	}
 }

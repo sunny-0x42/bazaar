@@ -18,11 +18,13 @@ type Props = {
   network: Network;
   onNetwork: (id: string) => void;
   onProfile?: () => void;
+  isAdmin?: boolean;
 };
 
 const DESK_NAV: { id: Tab; label: string }[] = [
   { id: "explore", label: "Explore" },
   { id: "create", label: "Launch" },
+  { id: "guide", label: "Guide" },
   { id: "sell", label: "Sell" },
   { id: "portfolio", label: "Profile" },
 ];
@@ -40,6 +42,7 @@ export function Header({
   network,
   onNetwork,
   onProfile,
+  isAdmin,
 }: Props) {
   const live = network.id === "pearl";
   const { quote, setQuote, gnotUsd } = useQuote();
@@ -81,6 +84,15 @@ export function Header({
               {item.label}
             </button>
           ))}
+          {isAdmin ? (
+            <button
+              type="button"
+              className={tab === "admin" ? "active" : ""}
+              onClick={() => onTab("admin")}
+            >
+              Admin
+            </button>
+          ) : null}
         </nav>
 
         <div className="header-tools">
@@ -115,6 +127,16 @@ export function Header({
             }))}
           />
         </div>
+
+        {isAdmin ? (
+          <button
+            type="button"
+            className={`admin-nav ${tab === "admin" ? "active" : ""}`}
+            onClick={() => onTab("admin")}
+          >
+            Admin
+          </button>
+        ) : null}
 
         {connected && address ? (
           <button className="wallet-chip" type="button" title={address} onClick={onProfile}>

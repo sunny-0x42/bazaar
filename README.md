@@ -17,11 +17,17 @@ This is not a DEX, not gnomi.fun, and not the Gnomies collection.
 | Chain | Pearl (`pearl-1`) |
 | Units | 1 GNOT = 1,000,000 `ugnot` |
 
-Live NFT module (Pearl):
+Live site: https://bazaar-gno.vercel.app
 
-`gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5`
+Pearl factory (one collection = one realm):
+
+`gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factoryv3`
 
 Faucet: https://pearl.testnets.gno.land/faucet
+
+- [Guide](https://bazaar-gno.vercel.app/#/guide)
+- [List without Launch](docs/listing-external.md)
+- [Adena collectables](docs/adena-collectables.md)
 
 ## Layout
 
@@ -29,7 +35,9 @@ Faucet: https://pearl.testnets.gno.land/faucet
 | --- | --- |
 | `gno.land/p/bazaar/fee/v1` | Overflow-safe protocol fee |
 | `gno.land/r/bazaar` | Hub (`SetModule` upgrades) |
-| `gno.land/r/bazaar/nft` | Items, drops, list / buy / launchpad |
+| `gno.land/r/bazaar/nft` | Legacy slug book (nftv7 on Pearl) |
+| `gno.land/r/bazaar/factory` | Collection registry |
+| `gno.land/r/bazaar/col` | Collection realm template |
 | `web/` | English Vite UI |
 
 ## Local UI

@@ -55,9 +55,16 @@ export const PROTOCOL_BPS = 50;
 export const HUB_KEY = "bazaar.hub";
 export const MARKET_KEY = "bazaar.market";
 export const NFT_KEY = "bazaar.nft";
+export const FACTORY_KEY = "bazaar.factory";
 export const DEFAULT_HUB = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar";
-export const DEFAULT_NFT = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5";
+export const DEFAULT_NFT = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv7";
 export const DEFAULT_MARKET = "gno.land/r/bazaar/market";
+export const PEARL_BAZAAR = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar";
+/** Local collection factory. Each collection is its own realm at `gno.land/r/bazaar/c/{slug}`. */
+export const FACTORY_PKG = "gno.land/r/bazaar/factory";
+export const FACTORY_PKG_PEARL_V2 = `${PEARL_BAZAAR}/factoryv2`;
+export const FACTORY_PKG_PEARL = `${PEARL_BAZAAR}/factoryv3`;
+export const DEFAULT_FACTORY = FACTORY_PKG;
 
 export function normalizePkgPath(p: string): string {
   return p.trim().replace(/\/+$/, "");
@@ -94,13 +101,31 @@ export function loadNft(): string {
       stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nft" ||
       stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv2" ||
       stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv3" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv4"
+      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv4" ||
+      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5" ||
+      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv6"
     ) {
       return DEFAULT_NFT;
     }
     return stored;
   } catch {
     return DEFAULT_NFT;
+  }
+}
+
+export function loadFactory(): string {
+  try {
+    const stored = normalizePkgPath(localStorage.getItem(FACTORY_KEY) || "");
+    if (
+      stored === `${PEARL_BAZAAR}/factory` ||
+      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factory"
+    ) {
+      return FACTORY_PKG_PEARL;
+    }
+    if (!stored) return DEFAULT_FACTORY;
+    return stored;
+  } catch {
+    return DEFAULT_FACTORY;
   }
 }
 
@@ -128,6 +153,14 @@ export function saveNft(p: string) {
   }
 }
 
+export function saveFactory(p: string) {
+  try {
+    localStorage.setItem(FACTORY_KEY, normalizePkgPath(p));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function parseEvalInt(s: string): number {
   const first = String(s).split("\n")[0] ?? "";
   const m = first.match(/-?\d+/);
@@ -137,8 +170,82 @@ export function parseEvalInt(s: string): number {
 export function parseEvalString(s: string): string {
   const first = String(s).split("\n")[0] ?? "";
   const quoted = first.match(/"([\s\S]*)"/);
-  if (quoted) return quoted[1].replace(/\\n/g, "\n");
+  if (quoted) return quoted[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
   return first.replace(/^\(|\)$/g, "").replace(/\s*string\s*$/, "").trim();
+}
+
+export type TokenAttribute = { trait_type: string; value: string };
+
+export type TokenURIMeta = {
+  name: string;
+  description: string;
+  image: string;
+  attributes: TokenAttribute[];
+  kind: "json" | "image";
+  json: string;
+};
+
+function tokenAttrs(raw: unknown): TokenAttribute[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TokenAttribute[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    const type = String(rec.trait_type ?? rec.traitType ?? rec.type ?? "").trim();
+    const value = rec.value == null ? "" : String(rec.value).trim();
+    if (type && value) out.push({ trait_type: type, value });
+  }
+  return out;
+}
+
+function decodeTokenJSON(body: string): string {
+  const s = body.trim();
+  if (!/%[0-9A-Fa-f]{2}/.test(s)) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+function unwrapTokenURI(raw: string): string {
+  const t = String(raw || "").trim();
+  if (!t) return "";
+  if (/^data:application\/json/i.test(t) || /^(https?:\/\/|\/samples\/|ipfs:\/\/)/i.test(t)) return t;
+  return parseEvalString(t).trim() || t;
+}
+
+/** Dual-read GRC721 TokenURI: JSON data URI (new col) or bare image URL (Foam). */
+export function parseTokenURI(raw: string): TokenURIMeta {
+  const empty: TokenURIMeta = { name: "", description: "", image: "", attributes: [], kind: "image", json: "" };
+  const s = unwrapTokenURI(raw);
+  if (!s) return empty;
+  if (/^data:application\/json(?:;[^,]*)?,/i.test(s)) {
+    const comma = s.indexOf(",");
+    const body = comma >= 0 ? s.slice(comma + 1) : "";
+    const decoded = decodeTokenJSON(body);
+    try {
+      const obj = JSON.parse(decoded) as Record<string, unknown>;
+      const name = typeof obj.name === "string" ? obj.name : "";
+      const description = typeof obj.description === "string" ? obj.description : "";
+      const image = typeof obj.image === "string" ? obj.image : "";
+      const attributes = tokenAttrs(obj.attributes);
+      let json = "";
+      try {
+        json = JSON.stringify(
+          { name, description, image, attributes },
+          null,
+          2,
+        );
+      } catch {
+        json = decoded;
+      }
+      return { name, description, image, attributes, kind: "json", json };
+    } catch {
+      return { ...empty, kind: "json", json: decoded };
+    }
+  }
+  return { ...empty, image: s, kind: "image" };
 }
 
 export type Listing = {
@@ -286,6 +393,9 @@ export type ChainCollection = {
   website?: string;
   twitter?: string;
   discord?: string;
+  pkg?: string;
+  addr?: string;
+  royaltyBps?: number;
 };
 
 export type OfferRow = {
@@ -491,6 +601,94 @@ export function parseCollectionLines(raw: string): ChainCollection[] {
     .filter((row): row is ChainCollection => !!row);
 }
 
+/** Factory registry: slug|name|cover|pkg|mintPrice|maxSupply|minted|creator[|addr|royaltyBps]. Not nftv6 DropLine. */
+export function parseFactoryCollectionLine(line: string): ChainCollection | null {
+  const parts = line.split("|");
+  const slug = (parts[0] || "").trim();
+  const pkg = normalizePkgPath(parts[3] || "");
+  if (!slug || !isPkgPath(pkg)) return null;
+  const maxSupply = parseNumPart(parts[5]);
+  const minted = parseNumPart(parts[6]);
+  const row: ChainCollection = {
+    slug,
+    name: (parts[1] || slug).trim() || slug,
+    cover: (parts[2] || "").trim(),
+    count: minted,
+    mintPrice: parseNumPart(parts[4]),
+    maxSupply,
+    minted,
+    creator: (parts[7] || "").trim(),
+    paused: false,
+    drop: true,
+    bio: "",
+    pkg,
+  };
+  if (parts.length >= 9) {
+    const addr = (parts[8] || "").trim();
+    if (addr) row.addr = addr;
+  }
+  if (parts.length >= 10) row.royaltyBps = parseNumPart(parts[9]);
+  return row;
+}
+
+export function parseFeaturedLines(raw: string): string[] {
+  const blob = String(raw);
+  const quoted = blob.match(/"([\s\S]*)"/);
+  const text = quoted ? quoted[1].replace(/\\n/g, "\n") : parseEvalString(blob);
+  if (!text.trim()) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of text.split(/[\n,]+/)) {
+    const slug = part.trim().toLowerCase();
+    if (!isDropSlug(slug) || seen.has(slug)) continue;
+    seen.add(slug);
+    out.push(slug);
+  }
+  return out;
+}
+
+export function parseFactoryCollectionLines(raw: string): ChainCollection[] {
+  const text = parseEvalString(raw);
+  if (!text.trim()) return [];
+  return text
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(parseFactoryCollectionLine)
+    .filter((row): row is ChainCollection => !!row);
+}
+
+export function collectionBookPath(
+  slug: string,
+  cols: { slug: string; pkg?: string }[],
+  fallback: string,
+): string {
+  const want = slug.trim().toLowerCase();
+  const col = cols.find((c) => c.slug.trim().toLowerCase() === want);
+  const pkg = col?.pkg ? normalizePkgPath(col.pkg) : "";
+  return pkg && isPkgPath(pkg) ? pkg : normalizePkgPath(fallback);
+}
+
+/** Local collection realm copied from `r/bazaar/col`. */
+export function factoryPkgFor(net: NetworkId): string {
+  return net === "local" ? FACTORY_PKG : FACTORY_PKG_PEARL;
+}
+
+export function collectionRealmPath(slug: string, net: NetworkId = "pearl"): string {
+  const s = slug.trim().toLowerCase();
+  if (net === "local") return `gno.land/r/bazaar/c/${s}`;
+  return `${PEARL_BAZAAR}/c/${s}`;
+}
+
+/** Last two path segments, e.g. `c/hfoxes`. Copy the full pkg separately. */
+export function shortPkgPath(pkg: string): string {
+  const p = normalizePkgPath(pkg);
+  if (!p) return "";
+  const parts = p.replace(/^gno\.land\//i, "").split("/").filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join("/");
+  return parts[0] || p;
+}
+
 export type ActivitySource = "indexed" | "on-chain";
 
 export type Activity = {
@@ -641,8 +839,9 @@ export function isMintImage(url: string): boolean {
   return chain.length <= 200 && !/[\s|<>"'`]/.test(chain);
 }
 
+/** Gno package name and GRC721 symbol: 2–11 `[a-z][a-z0-9]*`, no hyphen. */
 export function isDropSlug(slug: string): boolean {
-  return /^[a-z0-9-]{2,16}$/.test(slug.trim());
+  return /^[a-z][a-z0-9]{1,10}$/.test(slug.trim());
 }
 
 export function isDropCover(url: string): boolean {
@@ -851,7 +1050,7 @@ export function traitGroups(items: Item[]): TraitGroup[] {
 }
 
 export type HashView = {
-  tab: "explore" | "sell" | "create" | "portfolio" | "settings";
+  tab: "explore" | "sell" | "create" | "portfolio" | "settings" | "admin" | "guide";
   slug: string;
   itemId: string;
   profile: string;
@@ -876,6 +1075,8 @@ export function parseHash(hash: string): HashView {
   if (h === "sell") return { ...empty, tab: "sell" };
   if (h === "portfolio" || h === "profile") return { ...empty, tab: "portfolio" };
   if (h === "settings") return { ...empty, tab: "settings" };
+  if (h === "admin") return { ...empty, tab: "admin" };
+  if (h === "guide") return { ...empty, tab: "guide" };
   return empty;
 }
 

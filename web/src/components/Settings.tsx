@@ -5,11 +5,13 @@ import { useEffect, useState } from "react";
 type Props = {
   hub: string;
   nft: string;
+  factory: string;
   connected: boolean;
   blocked: boolean;
   busy: boolean;
   onHub: (v: string) => void;
   onNft: (v: string) => void;
+  onFactory: (v: string) => void;
   onConnect: () => void;
   onSeed: () => void;
   network: Network;
@@ -22,11 +24,13 @@ type Props = {
 export function Settings({
   hub,
   nft,
+  factory,
   connected,
   blocked,
   busy,
   onHub,
   onNft,
+  onFactory,
   onConnect,
   onSeed,
   network,
@@ -43,7 +47,11 @@ export function Settings({
     <section className="page">
       <header className="page-head">
         <h1>Settings</h1>
-        <p className="muted">Network and package paths. The UI reads GetModule("nft"), then GetModule("market").</p>
+        <p className="muted">
+          Network and package paths. The UI reads GetModule("nft"), then GetModule("market"). Live default is nftv7.
+          Frozen books (nft–nftv5) stay on-chain — paste a path to read one. Factory is the local collection
+          registry at gno.land/r/bazaar/factory; Explore prefers factory rows when present.
+        </p>
       </header>
 
       <div className="panel form-narrow settings-panel">
@@ -72,6 +80,16 @@ export function Settings({
           <label>
             NFT package path
             <input className="mono" value={nft} onChange={(e) => onNft(e.target.value)} spellCheck={false} />
+          </label>
+          <label>
+            Factory package path
+            <input className="mono" value={factory} onChange={(e) => onFactory(e.target.value)} spellCheck={false} />
+            <span className="hint">
+              Local <span className="mono">gno.land/r/bazaar/factory</span>. Pearl{" "}
+              <span className="mono">…/bazaar/factoryv2</span>. Each collection is its own realm
+              (unique PackageAddress) at <span className="mono">gno.land/r/bazaar/c/{"{slug}"}</span>. Empty falls back
+              to nftv7 Explore.
+            </span>
           </label>
         </div>
 

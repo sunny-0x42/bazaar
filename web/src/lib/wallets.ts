@@ -124,7 +124,10 @@ function abciErrorMessage(log: string, fallback: string): string {
   if (undeclared) {
     const fn = undeclared[1];
     if (/^(Offer|CancelOffer|AcceptOffer|InstantSell|ListOffers)$/i.test(fn)) {
-      return `This NFT package has no ${fn}. Point Settings at nftv4 (or a newer last path).`;
+      return `This NFT package has no ${fn}. Point Settings at nftv7 (or a newer last path).`;
+    }
+    if (/^Init$/i.test(fn)) {
+      return "This collection package has no Init. Wait until local gnodev loads gno.land/r/bazaar/c/{slug}, then retry.";
     }
     if (/^(Sweep|DepositPool|WithdrawPool|DepositNftPool|LaunchCollection|AddDropItems|AddAllowlist|SetMintCap|SetHidden|Reveal)$/i.test(fn)) {
       return `This NFT package has no ${fn}. Deploy a newer module path and point Settings at it.`;

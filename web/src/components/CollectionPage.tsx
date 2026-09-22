@@ -14,6 +14,7 @@ import {
   socialHref,
   isOpenEdition,
   isPublicDrop,
+  shortPkgPath,
   ugnotFromGnot,
   type Activity,
   type Item,
@@ -25,6 +26,7 @@ import {
   type SortDir,
 } from "../lib/chain";
 import type { ChartPoint } from "../lib/chart";
+import { CopyLine } from "./CopyLine";
 import { EmptyState } from "./EmptyState";
 import { ItemArt } from "./ItemArt";
 import { ItemToolbar } from "./ItemToolbar";
@@ -119,6 +121,9 @@ export function CollectionPage({
 }: Props) {
 
   const [pane, setPane] = useState<Pane>("items");
+  useEffect(() => {
+    if (collection?.pkg && (pane === "offers" || pane === "pool")) setPane("items");
+  }, [collection?.pkg, pane]);
   const [sort, setSort] = useState<ItemSort>("price");
   const [dir, setDir] = useState<SortDir>("asc");
   const [rarity, setRarity] = useState("all");
@@ -238,6 +243,24 @@ export function CollectionPage({
                 {name}
                 {collection?.paused ? <span className="tag">Paused</span> : null}
               </h1>
+              <div className="collection-ids is-stack">
+                {collection?.pkg ? (
+                  <CopyLine
+                    variant="row"
+                    label="Realm"
+                    display={shortPkgPath(collection.pkg)}
+                    value={collection.pkg}
+                  />
+                ) : null}
+                {collection?.addr ? (
+                  <CopyLine
+                    variant="row"
+                    label="Address"
+                    display={shortAddr(collection.addr)}
+                    value={collection.addr}
+                  />
+                ) : null}
+              </div>
               {collection?.bio ? <p className="collection-bio">{collection.bio}</p> : null}
               {links.length > 0 ? (
                 <p className="collection-socials">
@@ -269,6 +292,27 @@ export function CollectionPage({
           </div>
 
           <div className="collection-stats stats-wide">
+            {collection?.pkg && isPublicDrop(collection) ? (
+              <>
+                <Stat
+                  label="Mint"
+                  value={
+                    collection.mintPrice > 0 ? <PriceMark ugnot={collection.mintPrice} /> : "Free"
+                  }
+                />
+                <Stat
+                  label="Remaining"
+                  value={
+                    isOpenEdition(collection)
+                      ? "Open"
+                      : `${Math.max(0, collection.maxSupply - collection.minted)} left`
+                  }
+                />
+                {collection.royaltyBps && collection.royaltyBps > 0 ? (
+                  <Stat label="Royalty" value={`${collection.royaltyBps / 100}%`} />
+                ) : null}
+              </>
+            ) : null}
             <Stat
               label="Floor"
               value={floor > 0 ? <PriceMark ugnot={floor} /> : "—"}
@@ -278,9 +322,13 @@ export function CollectionPage({
                   : floorPctFromPoints(chartPoints)
               }
             />
-            <Stat label="Top offer" value={topOffer > 0 ? <PriceMark ugnot={topOffer} /> : "—"} />
-            <Stat label="Volume" value={vol > 0 ? <PriceMark ugnot={vol} /> : "—"} />
-            <Stat label="Sales" value={String(sales.length)} />
+            {!(collection?.pkg && vol === 0 && sales.length === 0) ? (
+              <>
+                <Stat label="Top offer" value={topOffer > 0 ? <PriceMark ugnot={topOffer} /> : "—"} />
+                <Stat label="Volume" value={vol > 0 ? <PriceMark ugnot={vol} /> : "—"} />
+                <Stat label="Sales" value={String(sales.length)} />
+              </>
+            ) : null}
             <Stat label="Listed" value={`${listedCount}/${supply || "—"}`} />
             <Stat label="Owners" value={itemCount ? `${ownerPct}%` : "—"} />
           </div>
@@ -289,13 +337,11 @@ export function CollectionPage({
 
       <div className="col-tabs" role="tablist" aria-label="Collection">
         {(
-          [
-            ["items", "Items"],
-            ["offers", "Offers"],
-            ["pool", "Pool"],
-            ["chart", "Chart"],
-            ["activity", "Activity"],
-          ] as const
+          (
+            collection?.pkg
+              ? ([["items", "Items"], ["chart", "Chart"], ["activity", "Activity"]] as const)
+              : ([["items", "Items"], ["offers", "Offers"], ["pool", "Pool"], ["chart", "Chart"], ["activity", "Activity"]] as const)
+          )
         ).map(([id, label]) => (
           <button
             key={id}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  collectionRealmPath,
   ipfsToHttp,
   isDropCover,
   isDropMaxSupply,
@@ -7,6 +8,7 @@ import {
   isDropSlug,
   isMintName,
   UGNOT,
+  type NetworkId,
 } from "../lib/chain";
 import { DROP_ADD_CAP, JSON_SLOT_CAP, applyLaunchPack, countSlotLines, parseSlotBlob } from "../lib/dropjson";
 import { hasAdena } from "../lib/wallets";
@@ -42,6 +44,7 @@ type Props = {
   onLaunch: (plan: LaunchPlan) => void;
   onCancel?: () => void;
   launchFeeUgnot?: number;
+  network?: NetworkId;
 };
 
 const STEPS = [
@@ -52,7 +55,7 @@ const STEPS = [
   { id: 5, label: "Launch" },
 ] as const;
 
-export function LaunchWizard({ connected, blocked, busy, onConnect, onLaunch, onCancel, launchFeeUgnot = 1_000_000_000 }: Props) {
+export function LaunchWizard({ connected, blocked, busy, onConnect, onLaunch, onCancel, launchFeeUgnot = 1_000_000_000, network = "pearl" }: Props) {
   const [step, setStep] = useState(1);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
@@ -202,9 +205,11 @@ export function LaunchWizard({ connected, blocked, busy, onConnect, onLaunch, on
           </label>
           <label>
             Slug
-            <input value={slug} onChange={(e) => setSlug(e.target.value)} maxLength={16} spellCheck={false} placeholder="stones" />
+            <input value={slug} onChange={(e) => setSlug(e.target.value)} maxLength={11} spellCheck={false} placeholder="stones" />
             <span className="hint">
-              {slug && !slugOk ? " 2-16 lowercase letters, digits, or hyphens." : "Becomes #/m/" + (slug || "slug")}
+              {slug && !slugOk
+                ? " 2–11 lowercase letters or digits, start with a letter, no hyphen."
+                : `Package name. Realm …/c/${slug || "slug"} · mint #/m/${slug || "slug"}`}
             </span>
           </label>
           </div>
@@ -404,15 +409,20 @@ export function LaunchWizard({ connected, blocked, busy, onConnect, onLaunch, on
       {step === 5 ? (
         <>
           <p className="hint">
-            Review, then Launch. Create fee is {launchFeeUgnot > 0 ? `${launchFeeUgnot / 1_000_000} GNOT` : "free"} (admin
-            can change later). Adena signs create
-            {fromJson ? `, then ${batches} item batch${batches === 1 ? "" : "es"} (20 NFTs each)` : ""}
-            {allowBlob.trim() || Number(capN) > 0 ? ", then access" : ""}.
+            {network === "local"
+              ? "Local copies the collection realm, then Adena Initialize."
+              : "Pearl: addpkg the realm first, then Adena Initialize (no extra fee if you already Reserved)."}{" "}
+            Fee {launchFeeUgnot > 0 ? `${launchFeeUgnot / 1_000_000} GNOT` : "free"}
+            {fromJson ? ` · ${batches} item batch${batches === 1 ? "" : "es"}` : ""}.
           </p>
           <dl className="studio-facts">
             <div>
               <dt>Name</dt>
               <dd>{name || "—"}</dd>
+            </div>
+            <div>
+              <dt>Realm</dt>
+              <dd className="mono">{collectionRealmPath(slug || "slug", network)}</dd>
             </div>
             <div>
               <dt>Mint page</dt>
@@ -477,12 +487,12 @@ export function LaunchWizard({ connected, blocked, busy, onConnect, onLaunch, on
           </button>
         ) : connected ? (
           <button className="btn primary" type="button" disabled={blocked || busy || !step1 || !step2 || !step3 || !step4} onClick={submit}>
-            Launch
+            Initialize collection
           </button>
         ) : (
           hasAdena() ? (
             <button className="btn primary" type="button" onClick={onConnect}>
-              Connect Adena to launch
+              Connect Adena to initialize
             </button>
           ) : (
             <a className="btn primary" href="https://adena.app/" target="_blank" rel="noreferrer">

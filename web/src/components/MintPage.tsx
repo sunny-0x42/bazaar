@@ -1,5 +1,6 @@
 import type { ChainCollection, DropSale } from "../lib/chain";
-import { isOpenEdition, isPublicDrop, shortAddr, socialHref } from "../lib/chain";
+import { isOpenEdition, isPublicDrop, parseTokenURI, shortAddr, shortPkgPath, socialHref } from "../lib/chain";
+import { CopyLine } from "./CopyLine";
 import { EmptyState } from "./EmptyState";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
@@ -12,6 +13,7 @@ type Props = {
   allowN: number;
   mintCap: number;
   sale?: DropSale | null;
+  tokenURI?: string;
   connected: boolean;
   blocked: boolean;
   busy: boolean;
@@ -29,6 +31,7 @@ export function MintPage({
   allowN,
   mintCap,
   sale,
+  tokenURI = "",
   connected,
   blocked,
   busy,
@@ -45,9 +48,9 @@ export function MintPage({
           <h1>Mint</h1>
           <p className="muted">{slug || "Unknown drop"}</p>
         </header>
-        <EmptyState title="Drop not on this book" body="This slug is not a live collection drop.">
+        <EmptyState title="Collection not live" body="This slug is not a factory collection on this network.">
           <button className="btn" type="button" onClick={onBack}>
-            Launch
+            Back
           </button>
         </EmptyState>
       </section>
@@ -64,12 +67,17 @@ export function MintPage({
     { href: socialHref(drop.discord || ""), label: "Discord" },
   ].filter((row) => row.href);
   const mintedPct = drop.maxSupply > 0 ? Math.min(100, (drop.minted / drop.maxSupply) * 100) : 0;
+  const royaltyBps = drop.royaltyBps ?? sale?.royaltyBps ?? 0;
+  const token = tokenURI ? parseTokenURI(tokenURI) : null;
+  const art = drop.cover;
+  const pkg = drop.pkg || "";
+  const shortPkg = pkg ? shortPkgPath(pkg) : drop.slug;
 
   return (
     <section className="page mint-page">
       <div className="toolbar">
         <button className="btn" type="button" onClick={onBack}>
-          Launch
+          Back
         </button>
         <button className="btn" type="button" onClick={onOpenCollection}>
           Collection
@@ -77,7 +85,7 @@ export function MintPage({
       </div>
       <div className="mint-hero">
         <div className="featured-cover mint-cover">
-          <ItemArt name={drop.name} image={drop.cover} alt="" />
+          <ItemArt name={token?.name || drop.name} image={art} alt="" />
         </div>
         <div className="mint-copy">
           <h1>
@@ -85,7 +93,12 @@ export function MintPage({
             {paused ? <span className="tag">Paused</span> : null}
             {sale?.phase === "whitelist" ? <span className="tag">Whitelist</span> : null}
           </h1>
-          <p className="muted mono">{drop.slug}</p>
+          <div className="collection-ids is-stack">
+            {pkg ? <CopyLine variant="row" label="Realm" display={shortPkg} value={pkg} /> : null}
+            {drop.addr ? (
+              <CopyLine variant="row" label="Address" display={shortAddr(drop.addr)} value={drop.addr} />
+            ) : null}
+          </div>
           {drop.bio ? <p className="collection-bio">{drop.bio}</p> : null}
           {links.length > 0 ? (
             <p className="collection-socials">
@@ -95,6 +108,12 @@ export function MintPage({
                 </a>
               ))}
             </p>
+          ) : null}
+          {token?.kind === "json" && token.json ? (
+            <details className="token-json">
+              <summary>Token metadata (ERC-721 JSON)</summary>
+              <pre>{token.json}</pre>
+            </details>
           ) : null}
           <dl className="featured-stats">
             <div>
@@ -117,6 +136,12 @@ export function MintPage({
               <dt>Creator</dt>
               <dd className="mono">{shortAddr(drop.creator)}</dd>
             </div>
+            {royaltyBps > 0 ? (
+              <div>
+                <dt>Royalty</dt>
+                <dd className="num">{royaltyBps / 100}%</dd>
+              </div>
+            ) : null}
           </dl>
           <div
             className="drop-progress"
@@ -131,7 +156,7 @@ export function MintPage({
               ? hidden
                 ? "You receive Unrevealed (cover only). Art and traits stay hidden until you Reveal on the collection page. Primary mint is 0 bps — GNOT goes to the creator."
                 : `${loaded} unique slots loaded in file order. Primary mint is 0 bps — GNOT goes to the creator.`
-              : "Edition mint (cover + #n). The creator can load unique JSON items in Studio."}
+              : "Edition mint (cover + #n). Load unique JSON items when you initialize."}
             {sale?.phase === "whitelist"
               ? ` Whitelist round ${drop.minted}/${sale.wlSupply}.`
               : sale?.wlSupply
@@ -139,7 +164,7 @@ export function MintPage({
                 : allowN > 0
                   ? ` Allowlist on (${allowN}).`
                   : " Public mint."}
-            {sale && sale.royaltyBps > 0 ? ` Secondary royalty ${sale.royaltyBps / 100}%.` : ""}
+            {royaltyBps > 0 ? ` Secondary royalty ${royaltyBps / 100}%.` : ""}
             {mintCap > 0 ? ` Max ${mintCap} per wallet.` : ""}
           </p>
           {paused ? (

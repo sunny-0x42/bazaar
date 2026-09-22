@@ -3,7 +3,6 @@ package nft
 import (
 	"chain"
 	"chain/banker"
-	"chain/runtime/unsafe"
 	"strconv"
 	"strings"
 
@@ -22,10 +21,7 @@ func offerKey(id int, bidder address) string {
 func Offer(cur realm, id int) {
 	caller := requireUser(cur)
 	it := mustItem(id)
-	sent := unsafe.OriginSend().AmountOf(nativeDenom)
-	if sent <= 0 {
-		panic("nft: offer")
-	}
+	sent := takeOneUgnotPositive()
 	if caller == it.seller || caller == it.owner {
 		panic("nft: self offer")
 	}
@@ -99,6 +95,11 @@ func AcceptOffer(cur realm, id int, bidder address) {
 		}
 	}
 	fees += proto
+	from := caller
+	if it.listed {
+		from = self
+	}
+	grcTransfer(it.collection, from, from, bidder, id)
 	it.listed = false
 	it.seller = address("")
 	it.price = 0

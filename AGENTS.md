@@ -18,6 +18,9 @@ Fixed-price NFT marketplace and collection launchpad on gno.land. Hub `SetModule
 gno test ./gno.land/p/bazaar/fee/v1/
 gno test ./gno.land/r/bazaar/
 gno test ./gno.land/r/bazaar/market/
+gno test ./gno.land/r/bazaar/factory/
+gno test ./gno.land/r/bazaar/col/
+gno test ./gno.land/r/bazaar/c/demo/
 cd web; npm test
 cd web; npm run dev
 ```

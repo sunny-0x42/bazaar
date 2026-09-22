@@ -9,6 +9,7 @@ import {
   gnotFromCoins,
   mintHash,
   parseHash,
+  tabHash,
   profileHash,
   parseCoinsUgnot,
   artSrc,
@@ -29,6 +30,13 @@ import {
   isSamplePath,
   parseActivityLines,
   parseCollectionLines,
+  parseFactoryCollectionLines,
+  parseFeaturedLines,
+  collectionBookPath,
+  collectionRealmPath,
+  DEFAULT_FACTORY,
+  DEFAULT_NFT,
+  FACTORY_PKG,
   parseIds,
   parseItems,
   parseListings,
@@ -39,6 +47,7 @@ import {
   parsePoolOf,
   parseSocials,
   parseDropSale,
+  parseTokenURI,
   sameAddr,
   socialHref,
   sweepQuote,
@@ -471,6 +480,103 @@ describe("parseCollectionLines", () => {
   });
 });
 
+describe("parseFactoryCollectionLines", () => {
+  it("reads slug|name|cover|pkg|mintPrice|maxSupply|minted|creator", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("demo|Demo|/samples/clay-01.png|gno.land/r/bazaar/c/demo|1000000|100|3|g1abc" string)`,
+    );
+    expect(parsed).toEqual([
+      {
+        slug: "demo",
+        name: "Demo",
+        cover: "/samples/clay-01.png",
+        count: 3,
+        mintPrice: 1_000_000,
+        maxSupply: 100,
+        minted: 3,
+        creator: "g1abc",
+        paused: false,
+        drop: true,
+        bio: "",
+        pkg: "gno.land/r/bazaar/c/demo",
+      },
+    ]);
+    expect(parsed[0].addr).toBeUndefined();
+    expect(parsed[0].royaltyBps).toBeUndefined();
+  });
+
+  it("reads optional addr and royaltyBps when 10 fields are present", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("demo|Demo|/samples/clay-01.png|gno.land/r/bazaar/c/demo|1000000|100|3|g1abc|g1coladdr00000000000000000000000000|500" string)`,
+    );
+    expect(parsed).toEqual([
+      {
+        slug: "demo",
+        name: "Demo",
+        cover: "/samples/clay-01.png",
+        count: 3,
+        mintPrice: 1_000_000,
+        maxSupply: 100,
+        minted: 3,
+        creator: "g1abc",
+        paused: false,
+        drop: true,
+        bio: "",
+        pkg: "gno.land/r/bazaar/c/demo",
+        addr: "g1coladdr00000000000000000000000000",
+        royaltyBps: 500,
+      },
+    ]);
+  });
+
+  it("keeps 8-field rows next to 10-field rows", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("demo|Demo|/samples/clay-01.png|gno.land/r/bazaar/c/demo|1000000|100|3|g1abc\\nfoxes|Harbor Foxes|/samples/foxes-01.png|gno.land/r/bazaar/c/foxes|2000000|10|1|g1def|g1foxaddr00000000000000000000000000|250" string)`,
+    );
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toMatchObject({
+      slug: "demo",
+      pkg: "gno.land/r/bazaar/c/demo",
+    });
+    expect(parsed[0].addr).toBeUndefined();
+    expect(parsed[0].royaltyBps).toBeUndefined();
+    expect(parsed[1]).toMatchObject({
+      slug: "foxes",
+      pkg: "gno.land/r/bazaar/c/foxes",
+      addr: "g1foxaddr00000000000000000000000000",
+      royaltyBps: 250,
+    });
+  });
+
+  it("skips nftv6 DropLine rows (count is not a pkg path)", () => {
+    expect(
+      parseFactoryCollectionLines(
+        `("stones|Signal Stones|/samples/stones-01.png|3|500000|6|3|g1abc" string)`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("defaults factory to the local bazaar factory pkg", () => {
+    expect(DEFAULT_FACTORY).toBe("gno.land/r/bazaar/factory");
+    expect(DEFAULT_FACTORY).toBe(FACTORY_PKG);
+    expect(DEFAULT_FACTORY).not.toBe(DEFAULT_NFT);
+    expect(collectionRealmPath("hfoxes", "local")).toBe("gno.land/r/bazaar/c/hfoxes");
+    expect(collectionRealmPath("hfoxes", "pearl")).toBe(
+      "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/hfoxes",
+    );
+    expect(
+      collectionBookPath(
+        "demo",
+        [{ slug: "demo", pkg: "gno.land/r/bazaar/c/demo" }],
+        DEFAULT_NFT,
+      ),
+    ).toBe("gno.land/r/bazaar/c/demo");
+    expect(collectionBookPath("missing", [{ slug: "demo", pkg: "gno.land/r/bazaar/c/demo" }], DEFAULT_NFT)).toBe(
+      DEFAULT_NFT,
+    );
+  });
+});
+
 describe("parseActivityLines", () => {
   it("reads kind|id|slug|actor|price|name rows from qeval", () => {
     const parsed = parseActivityLines(
@@ -652,12 +758,17 @@ describe("isMintName / isMintImage", () => {
 });
 
 describe("drop field validators", () => {
-  it("accepts slug 2–16 [a-z0-9-]", () => {
+  it("accepts Gno package names 2–11 [a-z][a-z0-9]* and rejects hyphen / 12-char", () => {
     expect(isDropSlug("stones")).toBe(true);
     expect(isDropSlug("a1")).toBe(true);
-    expect(isDropSlug("paper-relics")).toBe(true);
+    expect(isDropSlug("hfoxes")).toBe(true);
+    expect(isDropSlug("x".repeat(11))).toBe(true);
+    expect(isDropSlug("paper-relics")).toBe(false);
+    expect(isDropSlug("a-b")).toBe(false);
     expect(isDropSlug("a")).toBe(false);
     expect(isDropSlug("A1")).toBe(false);
+    expect(isDropSlug("1abc")).toBe(false);
+    expect(isDropSlug("x".repeat(12))).toBe(false);
     expect(isDropSlug("x".repeat(17))).toBe(false);
   });
 
@@ -768,6 +879,8 @@ describe("parseCatalog / buildExploreCollections", () => {
     expect(row.sales).toBe(1);
     const markets = new Map(cards.map((c) => [c.slug, collectionMarketRow(c, listed, tape)]));
     expect(pickFeatured(cards, markets, 1)[0].slug).toBe("stones");
+    expect(pickFeatured(cards, markets, 4, { requireVolume: true }).map((c) => c.slug)).toEqual(["stones"]);
+    expect(pickFeatured(cards, markets, 4, { requireVolume: true, exclude: new Set(["stones"]) })).toEqual([]);
   });
 
   it("uses catalog listedCount and volume for preview ME-style rows", () => {
@@ -906,6 +1019,37 @@ describe("parseCatalog / buildExploreCollections", () => {
     ]);
     expect(drops.map((d) => d.slug)).toEqual(["stones", "lamps"]);
     expect(drops.every((d) => d.preview)).toBe(true);
+  });
+
+  it("shows factory collections with pkg and skips catalog preview", () => {
+    const cards = buildExploreCollections(
+      catalog,
+      [
+        {
+          slug: "demo",
+          name: "Demo",
+          cover: "/samples/clay-01.png",
+          count: 0,
+          mintPrice: 1_000_000,
+          maxSupply: 100,
+          minted: 0,
+          creator: "g1abc",
+          paused: false,
+          drop: true,
+          bio: "",
+          pkg: "gno.land/r/bazaar/c/demo",
+          addr: "g1coladdr00000000000000000000000000",
+          royaltyBps: 500,
+        },
+      ],
+      [],
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].slug).toBe("demo");
+    expect(cards[0].pkg).toBe("gno.land/r/bazaar/c/demo");
+    expect(cards[0].preview).toBe(false);
+    expect(cards[0].maxSupply).toBe(100);
+    expect(cards[0].royaltyBps).toBe(500);
   });
 
   it("keeps mintPrice when preview items have no listPrice", () => {
@@ -1069,6 +1213,16 @@ describe("gnotFromCoins", () => {
   });
 });
 
+describe("parseFeaturedLines", () => {
+  it("parses qeval featured slugs and ignores junk", () => {
+    expect(parseFeaturedLines(`("tide\\nkelp" string)`)).toEqual(["tide", "kelp"]);
+    expect(parseFeaturedLines(`("tide,kelp,nope!" string)`)).toEqual(["tide", "kelp"]);
+    expect(parseFeaturedLines(`("tide\\n\\ntide\\nkelp\\n" string)`)).toEqual(["tide", "kelp"]);
+    expect(parseFeaturedLines(`("" string)`)).toEqual([]);
+    expect(parseFeaturedLines("")).toEqual([]);
+  });
+});
+
 describe("parseHash", () => {
   it("reads collection, item, and page URLs", () => {
     expect(parseHash("#/c/stones")).toEqual({ tab: "explore", slug: "stones", itemId: "", profile: "", mintSlug: "" });
@@ -1086,8 +1240,12 @@ describe("parseHash", () => {
       mintSlug: "",
     });
     expect(parseHash("#/settings")).toEqual({ tab: "settings", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/admin")).toEqual({ tab: "admin", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/guide")).toEqual({ tab: "guide", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(tabHash("guide")).toBe("#/guide");
     expect(parseHash("#/explore")).toEqual({ tab: "explore", slug: "", itemId: "", profile: "", mintSlug: "" });
     expect(parseHash("")).toEqual({ tab: "explore", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(tabHash("admin")).toBe("#/admin");
     expect(profileHash("g1abc")).toBe("#/u/g1abc");
     expect(mintHash("stones")).toBe("#/m/stones");
   });
@@ -1113,5 +1271,53 @@ describe("isNameNotDeclared", () => {
     expect(isNameNotDeclared("ERROR: /std.InternalError: recovered: name Offer not declared")).toBe(true);
     expect(isNameNotDeclared("name ListOffers not declared:")).toBe(true);
     expect(isNameNotDeclared("nft: self buy")).toBe(false);
+  });
+});
+
+describe("parseTokenURI", () => {
+  it("parses a json data URI with charset and percent-encoding", () => {
+    const json = {
+      name: "Sword",
+      description: "Sword #1",
+      image: "https://example.com/sword.png",
+      attributes: [{ trait_type: "Rarity", value: "Rare" }],
+    };
+    const uri = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(json))}`;
+    expect(parseTokenURI(uri)).toMatchObject({
+      kind: "json",
+      name: "Sword",
+      description: "Sword #1",
+      image: "https://example.com/sword.png",
+      attributes: [{ trait_type: "Rarity", value: "Rare" }],
+    });
+    expect(parseTokenURI(uri).json).toContain('"name": "Sword"');
+  });
+
+  it("parses an unencoded json data URI", () => {
+    const uri =
+      'data:application/json,{"name":"Foam","description":"Foam #1","image":"/samples/foam-01.png","attributes":[]}';
+    expect(parseTokenURI(uri)).toMatchObject({
+      kind: "json",
+      name: "Foam",
+      description: "Foam #1",
+      image: "/samples/foam-01.png",
+      attributes: [],
+    });
+  });
+
+  it("treats a bare image URL as image (Foam)", () => {
+    expect(parseTokenURI("https://example.com/sword.png")).toEqual({
+      name: "",
+      description: "",
+      image: "https://example.com/sword.png",
+      attributes: [],
+      kind: "image",
+      json: "",
+    });
+    expect(parseTokenURI("/samples/foam-01.png")).toMatchObject({
+      kind: "image",
+      image: "/samples/foam-01.png",
+    });
+    expect(parseTokenURI(`("https://example.com/sword.png" string)`).image).toBe("https://example.com/sword.png");
   });
 });

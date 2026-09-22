@@ -35,6 +35,11 @@ export function Footer({ network, nft, onTab, onExploreHome }: Props) {
               </button>
             </li>
             <li>
+              <button type="button" onClick={() => onTab("guide")}>
+                Guide
+              </button>
+            </li>
+            <li>
               <button type="button" onClick={() => onTab("sell")}>
                 Sell
               </button>
@@ -55,11 +60,11 @@ export function Footer({ network, nft, onTab, onExploreHome }: Props) {
           <h3>Protocol</h3>
           <ul>
             <li>Quote: native ugnot (UI GNOT)</li>
-            <li>Create collection: platform fee (`LaunchFee`, default 1000 GNOT)</li>
+            <li>Create collection: platform LaunchFee (shown on Launch)</li>
             <li>Primary mint: 0 bps — all GNOT to creator</li>
             <li>Secondary buy: 50 bps protocol + creator royalty (0–10%)</li>
-            <li>No royalty. No self-buy.</li>
-            <li>JSON supply up to 10,000 unique, or open edition. Slug 2–16.</li>
+            <li>No self-buy</li>
+            <li>JSON supply up to 10,000 unique, or open edition. Slug 2–11, no hyphen (Gno package name).</li>
           </ul>
         </div>
         <div>

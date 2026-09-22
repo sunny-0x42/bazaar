@@ -6,7 +6,7 @@
 
 Uses a nested workspace (`dev/ws`) and a **dedicated** gnodev home (`%AppData%\Roaming\gno-bazaar`). Do not share Zdex's `gno` home — a mixed store panics with `unexpected node with location gno.land/r/bazaar/nft:0:0`.
 
-Pearl **nftv5** is live at `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5`. Point the UI NFT path at that package.
+Pearl **nftv7** is live at `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv7`. Point the UI NFT path at that package. nftv5/nftv6 stay frozen.
 
 After gnoweb is up: call `Init`, then Settings → Seed sample collections.
 
@@ -27,7 +27,9 @@ Live on Pearl (signer `g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt`):
 - **nftv2** (frozen): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv2` (addpkg 539125)
 - **nftv3** (frozen): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv3` (addpkg 558745, Init 558747, SeedSamples 558749).
 - **nftv4** (frozen): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv4` (addpkg 559860).
-- **nftv5** (create fee `LaunchFee` default 1000 GNOT, admin `SetLaunchFee`; royalty + WL/public sale): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5` (addpkg 560586, Init 560588, SeedSamples 560589). Seed: 6 drops, 21 listings. UI default NFT path is nftv5. `loadNft` remaps empty, nft, nftv2, nftv3, nftv4 to nftv5.
+- **nftv5** (frozen): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5` (addpkg 560586, Init 560588, SeedSamples 560589).
+- **nftv6** (frozen): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv6`.
+- **nftv7** (live book: `SetFeatured` / `Featured`; `LaunchFee` 10 GNOT): `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv7` (addpkg 565202, Init 565203, SeedSamples 565205, SetLaunchFee 565234, SetFeatured 565275). Featured: tide/kelp/drift. UI default NFT path is nftv7.
 
 UI default NFT path is that realm. Network: **Pearl**. Connect Adena, faucet, then Buy. Seller of seeded listings is the deployer — use a **different** wallet to Buy (self-buy panics).
 

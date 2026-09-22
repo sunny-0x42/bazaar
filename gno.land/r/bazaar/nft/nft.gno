@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"gno.land/p/bazaar/grc721/v0"
 	"gno.land/p/nt/avl/v0"
 	"gno.land/p/nt/seqid/v0"
 )
@@ -53,6 +54,9 @@ type collection struct {
 	wlPrice    int64
 	wlSupply   int
 	wlEnabled  bool
+	symbol     string
+	token      *grc721.Token
+	ledger     *grc721.PrivateLedger
 }
 
 type dropSlot struct {
@@ -68,6 +72,7 @@ const dropSlotHardCap = 10000
 const maxSupplyBound = 1_000_000
 const maxRoyaltyBps = 1000
 const defaultLaunchFee = int64(1_000_000_000) // 1000 GNOT
+const maxFeatured = 8
 
 type act struct {
 	kind  string
@@ -81,6 +86,7 @@ type act struct {
 var (
 	items       avl.Tree
 	collections avl.Tree
+	symbols     avl.Tree
 	acts        avl.Tree
 	offers      avl.Tree
 	pools       avl.Tree
@@ -91,6 +97,7 @@ var (
 	mintedBy    avl.Tree
 	userProfiles avl.Tree
 	actSeq      seqid.ID
+	tokenSeq    seqid.ID
 	nextID      int
 	inited      bool
 	seeded      bool
@@ -98,6 +105,7 @@ var (
 	self        address
 	fees        int64
 	launchFee   int64
+	featured    string
 )
 
 func Init(cur realm) {
@@ -111,6 +119,7 @@ func Init(cur realm) {
 	self = cur.Address()
 	items = avl.Tree{}
 	collections = avl.Tree{}
+	symbols = avl.Tree{}
 	offers = avl.Tree{}
 	pools = avl.Tree{}
 	lpPos = avl.Tree{}
@@ -119,31 +128,33 @@ func Init(cur realm) {
 	allowlist = avl.Tree{}
 	mintedBy = avl.Tree{}
 	userProfiles = avl.Tree{}
-	collections.Set("bazaar", &collection{slug: "bazaar", name: "Bazaar"})
+	bazaar := &collection{slug: "bazaar", name: "Bazaar"}
+	attachToken(cur, bazaar)
+	collections.Set("bazaar", bazaar)
 	launchFee = defaultLaunchFee
 	inited = true
 	chain.Emit("Init", "admin", admin.String())
 }
 
 func CreateCollection(cur realm, slug, name, cover string) {
-	putCollection(requireUser(cur), slug, name, cover, 0, 0, false)
+	putCollection(cur, requireUser(cur), slug, name, cover, 0, 0, false)
 	chain.Emit("CreateCollection", "slug", slug)
 }
 
 func CreateDrop(cur realm, slug, name, cover string, maxSupply int, mintPriceUgnot int64) {
 	caller := requireUser(cur)
 	takeLaunchFee()
-	createDropInner(caller, slug, name, cover, maxSupply, mintPriceUgnot)
+	createDropInner(cur, caller, slug, name, cover, maxSupply, mintPriceUgnot)
 }
 
-func createDropInner(caller address, slug, name, cover string, maxSupply int, mintPriceUgnot int64) {
+func createDropInner(cur realm, caller address, slug, name, cover string, maxSupply int, mintPriceUgnot int64) {
 	if maxSupply < 0 || maxSupply > maxSupplyBound {
 		panic("nft: maxSupply")
 	}
 	if mintPriceUgnot < 0 {
 		panic("nft: mintPrice")
 	}
-	putCollection(caller, slug, name, cover, maxSupply, mintPriceUgnot, true)
+	putCollection(cur, caller, slug, name, cover, maxSupply, mintPriceUgnot, true)
 	chain.Emit("CreateDrop", "slug", slug)
 	record("drop", slug, caller.String(), name, 0, mintPriceUgnot)
 }
@@ -162,6 +173,52 @@ func SetLaunchFee(cur realm, ugnot int64) {
 
 func LaunchFee() int64 {
 	return launchFee
+}
+
+// SetFeatured stores admin-picked launchpad slugs (home "Featured launchpads").
+// Secondary "Featured collections" are ranked by volume in the UI, not here.
+func SetFeatured(cur realm, csv string) {
+	caller := requireUser(cur)
+	if caller != admin {
+		panic("nft: not admin")
+	}
+	raw := strings.ReplaceAll(csv, "\n", ",")
+	parts := strings.Split(raw, ",")
+	out := ""
+	seen := avl.Tree{}
+	n := 0
+	for _, p := range parts {
+		slug := strings.TrimSpace(p)
+		if slug == "" {
+			continue
+		}
+		if !validSlug(slug) {
+			panic("nft: featured")
+		}
+		col := mustCollection(slug)
+		if !col.drop {
+			panic("nft: not a drop")
+		}
+		if seen.Has(slug) {
+			continue
+		}
+		n++
+		if n > maxFeatured {
+			panic("nft: featured")
+		}
+		seen.Set(slug, true)
+		if out != "" {
+			out += "\n"
+		}
+		out += slug
+	}
+	featured = out
+	chain.Emit("SetFeatured", "n", strconv.Itoa(n))
+}
+
+func Featured() string {
+	requireInit()
+	return featured
 }
 
 func Admin() string {
@@ -613,6 +670,7 @@ func Transfer(cur realm, to address, id int) {
 	if it.owner != caller {
 		panic("nft: not owner")
 	}
+	grcTransfer(it.collection, caller, caller, to, id)
 	it.owner = to
 	items.Set(itemKey(id), it)
 	chain.Emit("Transfer", "id", strconv.Itoa(id), "to", to.String())
@@ -621,6 +679,63 @@ func Transfer(cur realm, to address, id int) {
 
 func OwnerOf(id int) address {
 	return mustItem(id).owner
+}
+
+func GrcName() string {
+	requireInit()
+	col := mustCollection("bazaar")
+	if col.token == nil {
+		return col.name
+	}
+	return col.token.GetName()
+}
+
+func GrcSymbol() string {
+	requireInit()
+	col := mustCollection("bazaar")
+	if col.token == nil {
+		return col.symbol
+	}
+	return col.token.GetSymbol()
+}
+
+func GrcBalanceOf(addr string) int64 {
+	requireInit()
+	who := address(addr)
+	if !who.IsValid() {
+		return 0
+	}
+	total := int64(0)
+	collections.Iterate("", "", func(_ string, value any) bool {
+		col := value.(*collection)
+		if col.token == nil {
+			return false
+		}
+		n, err := col.token.BalanceOf(who)
+		if err != nil {
+			return false
+		}
+		total += n
+		return false
+	})
+	return total
+}
+
+func GrcOwnerOf(id int) string {
+	it := mustItem(id)
+	col := mustCollection(it.collection)
+	if col.token == nil {
+		panic("nft: no token")
+	}
+	owner, err := col.token.OwnerOf(itemTid(id))
+	if err != nil {
+		panic("nft: owner")
+	}
+	return owner.String()
+}
+
+func TokenURI(id int) string {
+	return mustItem(id).image
 }
 
 func SellerOf(id int) address {
@@ -789,7 +904,7 @@ func requireCreator(cur realm, slug string) (address, *collection) {
 	return caller, col
 }
 
-func putCollection(caller address, slug, name, cover string, maxSupply int, mintPrice int64, drop bool) {
+func putCollection(cur realm, caller address, slug, name, cover string, maxSupply int, mintPrice int64, drop bool) {
 	if !validSlug(slug) {
 		panic("nft: slug")
 	}
@@ -802,7 +917,7 @@ func putCollection(caller address, slug, name, cover string, maxSupply int, mint
 	if collections.Has(slug) {
 		panic("nft: collection exists")
 	}
-	collections.Set(slug, &collection{
+	col := &collection{
 		slug:      slug,
 		name:      name,
 		cover:     cover,
@@ -810,7 +925,53 @@ func putCollection(caller address, slug, name, cover string, maxSupply int, mint
 		maxSupply: maxSupply,
 		mintPrice: mintPrice,
 		drop:      drop,
-	})
+	}
+	attachToken(cur, col)
+	collections.Set(slug, col)
+}
+
+func attachToken(cur realm, col *collection) {
+	if !cur.IsCurrent() {
+		panic("nft: spoofed realm")
+	}
+	sym := col.slug
+	if len(sym) < 1 || len(sym) > grc721.MaxSymbolLen {
+		panic("nft: symbol")
+	}
+	if symbols.Has(sym) {
+		panic("nft: symbol exists")
+	}
+	tok, led := grc721.NewToken(col.name, sym, tokenSeq.Next(), cur)
+	col.token = tok
+	col.ledger = led
+	col.symbol = sym
+	symbols.Set(sym, col.slug)
+}
+
+func itemTid(id int) grc721.TokenID {
+	return grc721.TokenID(strconv.Itoa(id))
+}
+
+func mustLedger(slug string) *grc721.PrivateLedger {
+	col := mustCollection(slug)
+	if col.ledger == nil {
+		panic("nft: no ledger")
+	}
+	return col.ledger
+}
+
+func grcMint(slug string, to address, id int) {
+	err := mustLedger(slug).Mint(to, itemTid(id))
+	if err != nil {
+		panic("nft: mint")
+	}
+}
+
+func grcTransfer(slug string, spender, from, to address, id int) {
+	err := mustLedger(slug).TransferFrom(spender, from, to, itemTid(id))
+	if err != nil {
+		panic("nft: transfer")
+	}
 }
 
 func slotCap(col *collection) int {
@@ -845,6 +1006,7 @@ func mintTo(caller address, slug, name, imageURL string) int {
 		collection: slug,
 	}
 	items.Set(itemKey(id), it)
+	grcMint(slug, caller, id)
 	col.count++
 	collections.Set(slug, col)
 	chain.Emit("Mint", "id", strconv.Itoa(id), "owner", caller.String(), "collection", slug)

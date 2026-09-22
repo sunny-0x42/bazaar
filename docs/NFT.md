@@ -1,12 +1,16 @@
 # Bazaar NFT book (v2 product)
 
-Pearl has `p/demo/tokens/grc20` only — no `grc721`. Official `grc721` in gnolang/gno is quarantined. Bazaar ships its own unique-item realm. Not Gnomies (separate collection). Not a GRC20 OTC book.
+Pearl live book is **nftv7** — the **collection factory** (`SetFeatured` / `Featured`). Launch (`CreateDrop` / `LaunchCollection`) is a `MsgCall` on this one realm: each collection gets a GRC721 `Token` + `PrivateLedger` in nftv7 state. **No `addpkg` per collection.** GRC721 lib: `gno.land/p/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/grc721/v0`. **nftv5 and nftv6 are frozen.**
+
+Local source: `gno.land/p/bazaar/grc721/{v0,metadata/v0,enumerable/v0,royalty/v0}` (rewritten from `p/nt/grc721`, not a homemade token). `item.owner` is a cache of `OwnerOf`. Per-realm collections (`docs/FACTORY.md`) are local/experimental only.
 
 Fee: still 50 bps of the GNOT price (`p/bazaar/fee/v1`). Quote asset: native `ugnot`.
 
+Admin `SetFeatured(csv)` / `Featured()` pick up to 8 **launchpad** drop slugs for the home Featured launchpads row. Empty list hides that row. **Featured collections** on Explore rank by secondary volume in the UI (`pickFeatured`); no admin set. Pearl deploy name is `nftv7`.
+
 ## Hub
 
-`SetModule("nft", "gno.land/r/bazaar/nft")`. UI reads this first. Old `market` GRC20 module stays deployable but is not the default Explore.
+`SetModule("nft", "gno.land/r/bazaar/nft")`. Pearl deploy name is `nftv7`. UI reads Hub first. Old `market` GRC20 module stays deployable but is not the default Explore.
 
 ## Realm `gno.land/r/bazaar/nft`
 
@@ -23,7 +27,11 @@ One item = one token id. Listing is 1:1 with the item (cannot list a fraction).
 | `List(cur, id, priceUgnot)` | owner | escrow: owner becomes realm; status listed |
 | `Buy(cur, id)` | EOA | `OriginSend` == price; item to buyer |
 | `Cancel(cur, id)` | seller | item back to seller |
-| `OwnerOf(id) address` | read | listed items: realm address |
+| `OwnerOf(id) address` | read | listed items: realm address (cache of GRC721) |
+| `GrcName()` / `GrcSymbol()` | read | default collection `bazaar` (`Bazaar` / `bazaar`) |
+| `GrcBalanceOf(addr string) int64` | read | sum of GRC721 balances across collections |
+| `GrcOwnerOf(id int) string` | read | GRC721 `OwnerOf` on the item's collection ledger |
+| `TokenURI(id int) string` | read | `item.image` (Adena / qeval) |
 | `SellerOf(id) address` | read | empty if not listed |
 | `PriceOf(id) int64` | read | 0 if not listed |
 | `NameOf` / `ImageOf` / `Listed(id) bool` / `CollectionOf(id) string` | read | |

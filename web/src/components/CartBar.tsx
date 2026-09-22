@@ -34,7 +34,7 @@ export function CartBar({ items, connected, busy, onRemove, onClear, onCheckout,
     try {
       const res = await onCheckout();
       if (res.ok && res.preview) {
-        setStatus("Done. Preview listings are not on nftv5, so nothing was swept on-chain.");
+        setStatus("Done. Preview listings are not on nftv7, so nothing was swept on-chain.");
         window.setTimeout(() => onClear(), 2200);
         return;
       }

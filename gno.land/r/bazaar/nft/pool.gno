@@ -3,7 +3,6 @@ package nft
 import (
 	"chain"
 	"chain/banker"
-	"chain/runtime/unsafe"
 	"strconv"
 )
 
@@ -20,10 +19,7 @@ func poolPosKey(slug string, who address) string {
 func DepositPool(cur realm, slug string) {
 	caller := requireUser(cur)
 	mustCollection(slug)
-	sent := unsafe.OriginSend().AmountOf(nativeDenom)
-	if sent <= 0 {
-		panic("nft: pool deposit")
-	}
+	sent := takeOneUgnotPositive()
 	p := getPool(slug)
 	add := sent
 	if p.shares > 0 && p.gnot > 0 {
@@ -89,6 +85,7 @@ func DepositNftPool(cur realm, id int) {
 	if it.owner != caller {
 		panic("nft: not owner")
 	}
+	grcTransfer(it.collection, caller, caller, self, id)
 	it.owner = self
 	items.Set(itemKey(id), it)
 	nftPos.Set(itemKey(id), caller)
@@ -113,6 +110,7 @@ func WithdrawNftPool(cur realm, id int) {
 	if it.owner != self || it.listed {
 		panic("nft: not in pool")
 	}
+	grcTransfer(it.collection, self, self, caller, id)
 	it.owner = caller
 	items.Set(itemKey(id), it)
 	nftPos.Remove(itemKey(id))

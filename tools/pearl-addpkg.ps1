@@ -8,8 +8,9 @@ param(
   [string]$GasFee = "1000000ugnot",
   [int]$GasWantedFee = 80000000,
   [int]$GasWantedNft = 300000000,
+  [int]$GasWantedGrc721 = 200000000,
   [string]$MaxDeposit = "90000000ugnot",
-  [string]$NftName = "nftv5"
+  [string]$NftName = "nftv7"
 )
 $ErrorActionPreference = "Stop"
 $ROOT = Split-Path (Split-Path $PSScriptRoot -Parent) -ErrorAction SilentlyContinue
@@ -32,7 +33,16 @@ if ($env:BAZAAR_DEPLOYER) { $Address = $env:BAZAAR_DEPLOYER }
 
 Assert-DeployKeyExists -KeyName $KeyName -ExpectedAddress $Address
 
+if ($NftName -eq "nftv5" -or $NftName -eq "nftv6") {
+  throw "nftv5/nftv6 are frozen on Pearl. Use nftv7 (default) or a later name."
+}
+
 $feePath = "gno.land/p/$Address/bazaar/fee/v1"
+$grc721Root = "gno.land/p/$Address/bazaar/grc721"
+$grc721v0Path = "$grc721Root/v0"
+$grc721MetaPath = "$grc721Root/metadata/v0"
+$grc721EnumPath = "$grc721Root/enumerable/v0"
+$grc721RoyalPath = "$grc721Root/royalty/v0"
 $nftPath = "gno.land/r/$Address/bazaar/$NftName"
 $stage = Join-Path $ROOT "deploy\pearl"
 $feeDir = Join-Path $stage "p\$Address\bazaar\fee\v1"
@@ -46,9 +56,30 @@ module = "$feePath"
 gno = "0.9"
 "@
 
+function Stage-Grc721([string]$RelDir, [string]$ModPath) {
+  $srcDir = Join-Path $ROOT "gno.land\p\bazaar\grc721\$RelDir"
+  $dstDir = Join-Path $stage "p\$Address\bazaar\grc721\$RelDir"
+  New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+  Get-ChildItem $srcDir -Filter "*.gno" | Where-Object { $_.Name -notlike "*_test*" } | ForEach-Object {
+    $src = Get-Content $_.FullName -Raw -Encoding UTF8
+    $src = $src.Replace("gno.land/p/bazaar/grc721", $grc721Root)
+    [IO.File]::WriteAllText((Join-Path $dstDir $_.Name), $src)
+  }
+  Set-Content -Path (Join-Path $dstDir "gnomod.toml") -Encoding ascii -Value @"
+module = "$ModPath"
+gno = "0.9"
+"@
+}
+
+Stage-Grc721 "v0" $grc721v0Path
+Stage-Grc721 "metadata\v0" $grc721MetaPath
+Stage-Grc721 "enumerable\v0" $grc721EnumPath
+Stage-Grc721 "royalty\v0" $grc721RoyalPath
+
 Get-ChildItem (Join-Path $ROOT "gno.land\r\bazaar\nft") -Filter "*.gno" | Where-Object { $_.Name -notlike "*_test*" } | ForEach-Object {
   $src = Get-Content $_.FullName -Raw -Encoding UTF8
   $src = $src.Replace("gno.land/p/bazaar/fee/v1", $feePath)
+  $src = $src.Replace("gno.land/p/bazaar/grc721", $grc721Root)
   # Last path element must match `package` name.
   $src = $src.Replace("package nft`n", "package $NftName`n")
   $src = $src.Replace("package nft`r`n", "package $NftName`r`n")
@@ -59,7 +90,7 @@ module = "$nftPath"
 gno = "0.9"
 "@
 
-Write-Host "Staged $feePath and $nftPath"
+Write-Host "Staged $feePath, GRC721, and $nftPath"
 
 function Add-Pkg([string]$PkgPath, [string]$PkgDir, [int]$GasWanted, [string]$Step) {
   $q = & gnokey query vm/qpaths --data $PkgPath --remote $Remote 2>&1 | Out-String
@@ -97,6 +128,10 @@ function Call-Fn([string]$PkgPath, [string]$Func, [string[]]$FnArgs, [string]$Se
 }
 
 Add-Pkg $feePath $feeDir $GasWantedFee "addpkg fee/v1"
+Add-Pkg $grc721v0Path (Join-Path $stage "p\$Address\bazaar\grc721\v0") $GasWantedGrc721 "addpkg grc721/v0"
+Add-Pkg $grc721MetaPath (Join-Path $stage "p\$Address\bazaar\grc721\metadata\v0") $GasWantedGrc721 "addpkg grc721/metadata/v0"
+Add-Pkg $grc721EnumPath (Join-Path $stage "p\$Address\bazaar\grc721\enumerable\v0") $GasWantedGrc721 "addpkg grc721/enumerable/v0"
+Add-Pkg $grc721RoyalPath (Join-Path $stage "p\$Address\bazaar\grc721\royalty\v0") $GasWantedGrc721 "addpkg grc721/royalty/v0"
 Add-Pkg $nftPath $nftDir $GasWantedNft "addpkg nft"
 
 Call-Fn $nftPath "Init" @() "" "Init nft"

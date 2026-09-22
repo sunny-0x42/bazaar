@@ -10,6 +10,7 @@ import {
   ugnotFromGnot,
   type ChainCollection,
   type DropSlot,
+  type NetworkId,
 } from "../lib/chain";
 import { jsonToSlotBlob, looksLikeJson } from "../lib/dropjson";
 import { ItemArt } from "./ItemArt";
@@ -47,6 +48,7 @@ type Props = {
   onSetHidden?: (slug: string, hidden: boolean) => void;
   onLaunchWizard?: (plan: LaunchPlan) => void;
   launchFeeUgnot?: number;
+  network?: NetworkId;
 };
 
 const JSON_TEMPLATE = "/samples/drop-items.example.json";
@@ -79,6 +81,7 @@ export function Launch({
   onSetHidden,
   onLaunchWizard,
   launchFeeUgnot = 1_000_000_000,
+  network = "pearl",
 }: Props) {
   const [pane, setPane] = useState<Pane>("studio");
   const [studioPrice, setStudioPrice] = useState("");
@@ -97,6 +100,7 @@ export function Launch({
     [chainCollections, wallet],
   );
   const drops = useMemo(() => ownCols.filter((c) => isPublicDrop(c)), [ownCols]);
+  const factoryPad = network === "pearl" || chainCollections.some((c) => !!c.pkg);
 
   const itemOk = isMintName(itemName) && isMintImage(itemImage);
 
@@ -171,8 +175,9 @@ export function Launch({
       blocked={blocked}
       busy={busy}
       onConnect={onConnect}
-      onCancel={drops.length > 0 ? () => setShowCreate(false) : undefined}
+      onCancel={factoryPad || drops.length === 0 ? undefined : () => setShowCreate(false)}
       launchFeeUgnot={launchFeeUgnot}
+      network={network}
       onLaunch={(plan) => {
         pickSlotDrop(plan.slug);
         setShowCreate(false);
@@ -201,13 +206,13 @@ export function Launch({
       <header className="page-head">
         <h1>Launch</h1>
         <p className="muted">
-          Follow steps 1-5 to launch. Collectors mint at <span className="mono">#/m/{`{slug}`}</span>.
-        </p>
-        <p className="launch-banner" role="status">
-          Create fee is set by the platform admin (default 1000 GNOT). Primary mint 0 bps. Secondary 50 bps.
+          One collection, one realm. Collectors mint at <span className="mono">#/m/{`{slug}`}</span>.
+          {launchFeeUgnot > 0 ? ` Reserve fee ${launchFeeUgnot / 1_000_000} GNOT.` : ""} Primary mint 0 bps ·
+          secondary 50 bps.
         </p>
       </header>
 
+      {factoryPad ? null : (
       <div className="col-tabs" role="tablist" aria-label="Launch">
         <button
           type="button"
@@ -237,8 +242,40 @@ export function Launch({
           Mint 1/1
         </button>
       </div>
+      )}
 
-      {pane === "studio" ? (
+      {factoryPad ? (
+        <div className="studio-stack">
+          {drops.length > 0 ? (
+            <ul className="admin-drop-list">
+              {drops.map((col) => (
+                <li key={col.slug}>
+                  <div className="admin-drop">
+                    <span>
+                      <strong>{col.name}</strong>{" "}
+                      <span className="mono muted">{col.slug}</span> {col.minted}/
+                      {col.maxSupply > 0 ? col.maxSupply : "∞"}
+                    </span>
+                    <span className="profile-links">
+                      {onOpenMint ? (
+                        <button className="btn primary" type="button" onClick={() => onOpenMint(col.slug)}>
+                          Mint
+                        </button>
+                      ) : null}
+                      {onOpenCollection ? (
+                        <button className="btn" type="button" onClick={() => onOpenCollection(col.slug)}>
+                          Collection
+                        </button>
+                      ) : null}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {createForm}
+        </div>
+      ) : pane === "studio" ? (
         <Studio
           drops={drops}
           connected={connected}

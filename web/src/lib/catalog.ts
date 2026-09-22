@@ -53,6 +53,9 @@ export type ExploreCollection = {
   previewSales?: number;
   topOfferUgnot?: number;
   floorPct7d?: number;
+  pkg?: string;
+  addr?: string;
+  royaltyBps?: number;
 };
 
 export type Drop = {
@@ -195,7 +198,20 @@ export function previewActivityFor(col: CatalogCollection): Activity[] {
   return out.slice(0, 8);
 }
 
-const HIDE_FROM_EXPLORE = new Set(["stones", "lamps", "relics", "foxes", "docks", "clay", "bazaar"]);
+const HIDE_FROM_EXPLORE = new Set([
+  "stones",
+  "lamps",
+  "relics",
+  "foxes",
+  "docks",
+  "clay",
+  "bazaar",
+  "ember",
+  "tide",
+  "kelp",
+  "drift",
+  "wave",
+]);
 
 export function buildExploreCollections(
   catalog: CatalogCollection[],
@@ -204,6 +220,8 @@ export function buildExploreCollections(
 ): ExploreCollection[] {
   const bySlug = new Map<string, ExploreCollection>();
   const order: string[] = [];
+  const factoryCols = chainCols.filter((c) => !!c.pkg);
+  const factoryMode = factoryCols.length > 0;
 
   function ensure(slug: string): ExploreCollection {
     const existing = bySlug.get(slug);
@@ -228,6 +246,46 @@ export function buildExploreCollections(
     bySlug.set(slug, row);
     order.push(slug);
     return row;
+  }
+
+  if (factoryMode) {
+    for (const col of factoryCols) {
+      const row = ensure(col.slug);
+      row.name = col.name || row.name;
+      row.cover = col.cover || row.cover;
+      row.mintPrice = col.mintPrice;
+      row.maxSupply = col.maxSupply;
+      row.minted = col.minted || col.count;
+      row.paused = col.paused;
+      row.drop = col.drop || col.maxSupply > 0;
+      row.preview = false;
+      row.pkg = col.pkg;
+      if (col.addr) row.addr = col.addr;
+      if (col.royaltyBps != null) row.royaltyBps = col.royaltyBps;
+      if (col.bio) row.bio = col.bio;
+      if (col.website) row.website = col.website;
+      if (col.twitter) row.twitter = col.twitter;
+      if (col.discord) row.discord = col.discord;
+    }
+    const counts = new Map<string, number>();
+    for (const it of openItems) {
+      const slug = itemCollectionSlug(it);
+      const row = bySlug.get(slug);
+      if (!row) continue;
+      counts.set(slug, (counts.get(slug) || 0) + 1);
+      if (!row.cover && it.image) row.cover = it.image;
+    }
+    for (const [slug, n] of counts) {
+      const row = bySlug.get(slug);
+      if (row) row.itemCount = n;
+    }
+    for (const slug of order) {
+      const row = bySlug.get(slug);
+      if (!row) continue;
+      const listed = openItems.filter((it) => itemCollectionSlug(it) === slug && it.listed && it.price > 0);
+      row.floor = listed.length > 0 ? minPositive(listed.map((it) => it.price)) : 0;
+    }
+    return order.map((slug) => bySlug.get(slug)!);
   }
 
   for (const col of catalog) {
@@ -358,8 +416,21 @@ export function formatFloorPct(n: number): string {
   return `${sign}${body}%`;
 }
 
-export function pickFeatured(rows: ExploreCollection[], markets: Map<string, CollectionMarket>, n = 3): ExploreCollection[] {
+export function pickFeatured(
+  rows: ExploreCollection[],
+  markets: Map<string, CollectionMarket>,
+  n = 3,
+  opts?: { exclude?: Set<string>; requireVolume?: boolean },
+): ExploreCollection[] {
+  const exclude = opts?.exclude ?? new Set<string>();
+  const requireVolume = opts?.requireVolume === true;
   return rows
+    .filter((row) => {
+      if (exclude.has(row.slug)) return false;
+      const vol = markets.get(row.slug)?.vol || 0;
+      if (requireVolume && vol <= 0) return false;
+      return true;
+    })
     .slice()
     .sort((a, b) => {
       const ma = markets.get(a.slug);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
+import { Admin } from "./components/Admin";
 import { Launch } from "./components/Launch";
 import type { LaunchPlan } from "./components/LaunchWizard";
 import { DROP_ADD_CAP } from "./lib/dropjson";
@@ -7,6 +8,7 @@ import { MintPage } from "./components/MintPage";
 import { Explore } from "./components/Explore";
 import { CartBar } from "./components/CartBar";
 import { Footer } from "./components/Footer";
+import { Guide } from "./components/Guide";
 import { Header } from "./components/Header";
 import { Notices } from "./components/Notices";
 import { Profile } from "./components/Profile";
@@ -16,13 +18,22 @@ import { SkipLink } from "./components/SkipLink";
 import { TestnetRibbon } from "./components/TestnetRibbon";
 import type { Account, Tab } from "./components/types";
 import {
+  collectionBookPath,
+  collectionRealmPath,
   collectionHash,
   isNameNotDeclared,
   isOwnListing,
   isPkgPath,
+  isRealmUnavailable,
   isPreviewItem,
+  itemCollectionSlug,
   itemHash,
   mintHash,
+  FACTORY_PKG,
+  FACTORY_PKG_PEARL,
+  FACTORY_PKG_PEARL_V2,
+  factoryPkgFor,
+  loadFactory,
   loadHub,
   loadNetwork,
   loadNft,
@@ -31,12 +42,14 @@ import {
   parseActivityLines,
   parseCollectionLines,
   parseEvalString,
+  parseFactoryCollectionLines,
   parseHash,
   parseIds,
   tabHash,
   parseItems,
   parseDropSlotLines,
   parseEvalInt,
+  parseFeaturedLines,
   parseDropSale,
   type DropSale,
   parseOfferLines,
@@ -49,6 +62,7 @@ import {
   canAddToCart,
   itemRowKey,
   topOfferFor,
+  saveFactory,
   saveHub,
   saveNetwork,
   saveNft,
@@ -67,24 +81,59 @@ import { fetchActivity } from "./lib/indexer";
 import { emptyProfile, loadLocalProfile, parseProfileLine, saveLocalProfile, type UserProfile } from "./lib/userProfile";
 import { connectAdena, doContractCall, evalExpr } from "./lib/wallets";
 
+async function loadListOpen(rpc: string, pkg: string): Promise<Item[]> {
+  return parseItems(await evalExpr(rpc, pkg, "ListOpen()"));
+}
+
+async function loadItemLine(rpc: string, pkg: string, id: string | number): Promise<Item | null> {
+  try {
+    const n = Number(id);
+    if (!Number.isInteger(n) || n <= 0) return null;
+    return parseItems(await evalExpr(rpc, pkg, `ItemLine(${n})`))[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function tagCollectionSlug(items: Item[], slug: string): Item[] {
+  return items.map((it) => (it.collection ? it : { ...it, collection: slug }));
+}
+
+async function loadCollectionBook(
+  rpc: string,
+  pkg: string,
+  slug: string,
+  minted = 0,
+): Promise<Item[]> {
+  let open: Item[] = [];
+  try {
+    open = tagCollectionSlug(await loadListOpen(rpc, pkg), slug);
+  } catch {
+    open = [];
+  }
+  const byId = new Map(open.filter((it) => it.id).map((it) => [it.id, it]));
+  const cap = Math.min(50, Math.max(minted, 0));
+  const missing: number[] = [];
+  for (let n = 1; n <= cap; n++) {
+    if (!byId.has(String(n))) missing.push(n);
+  }
+  if (missing.length > 0) {
+    const extra = await Promise.all(missing.map((n) => loadItemLine(rpc, pkg, n)));
+    for (const row of extra) {
+      if (!row?.id) continue;
+      byId.set(row.id, row.collection ? row : { ...row, collection: slug });
+    }
+  }
+  return [...byId.values()];
+}
+
 async function loadHoldings(rpc: string, nftPath: string, addr: string, open: Item[]): Promise<Item[]> {
   const idsRaw = await evalExpr(rpc, nftPath, `TokensOf(${JSON.stringify(addr)})`);
   const ids = parseIds(idsRaw);
   const listedMap = new Map(open.map((row) => [row.id, row]));
   const missing = ids.filter((id) => !listedMap.has(id)).slice(0, 50);
   const extra = (
-    await Promise.all(
-      missing.map(async (id) => {
-        try {
-          const n = Number(id);
-          if (!Number.isInteger(n) || n <= 0) return null;
-          const raw = await evalExpr(rpc, nftPath, `ItemLine(${n})`);
-          return parseItems(raw)[0] ?? null;
-        } catch {
-          return null;
-        }
-      }),
-    )
+    await Promise.all(missing.map((id) => loadItemLine(rpc, nftPath, id)))
   ).filter((row): row is Item => !!row);
   const byId = new Map<string, Item>();
   for (const row of extra) byId.set(row.id, { ...row, listed: false });
@@ -112,6 +161,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>("explore");
   const [hub, setHub] = useState(loadHub);
   const [nft, setNft] = useState(loadNft);
+  const [factory, setFactory] = useState(loadFactory);
   const [account, setAccount] = useState<Account | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [owned, setOwned] = useState<Item[]>([]);
@@ -125,6 +175,7 @@ export function App() {
   const [collectionPoolShares, setCollectionPoolShares] = useState(0);
   const [collectionSocials, setCollectionSocials] = useState<Socials>({ website: "", twitter: "", discord: "" });
   const [homeActivity, setHomeActivity] = useState<Activity[] | null>(null);
+  const [featuredSlugs, setFeaturedSlugs] = useState<string[]>([]);
   const [chainNote, setChainNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -134,6 +185,16 @@ export function App() {
   const [listId, setListId] = useState("");
   const [listPrice, setListPrice] = useState("1");
   const [net, setNet] = useState(loadNetwork);
+  useEffect(() => {
+    if (
+      !factory ||
+      factory === FACTORY_PKG ||
+      factory === FACTORY_PKG_PEARL ||
+      factory.endsWith("/bazaar/factory")
+    ) {
+      setFactory(factoryPkgFor(net.id));
+    }
+  }, [net.id]);
   const [openItemId, setOpenItemId] = useState("");
   const [profileAddr, setProfileAddr] = useState("");
   const [profileItems, setProfileItems] = useState<Item[]>([]);
@@ -150,6 +211,7 @@ export function App() {
   const [mintAllowN, setMintAllowN] = useState(0);
   const [mintCap, setMintCap] = useState(0);
   const [mintSale, setMintSale] = useState<DropSale | null>(null);
+  const [mintTokenURI, setMintTokenURI] = useState("");
   const [hasOffers, setHasOffers] = useState(true);
   const [hasPool, setHasPool] = useState(true);
   const [launchFeeUgnot, setLaunchFeeUgnot] = useState(1_000_000_000);
@@ -166,6 +228,127 @@ export function App() {
     setChainNote("");
     const nftPath = await resolveNftPath(rpc, hub, nft);
     if (nftPath !== nft) setNft(nftPath);
+    const factoryPath = isPkgPath(factory) ? normalizePkgPath(factory) : "";
+
+    const factoryTask = (async () => {
+      const paths = [factoryPath, net.id === "pearl" ? FACTORY_PKG_PEARL_V2 : ""].filter(
+        (p, i, all) => p && isPkgPath(p) && all.indexOf(p) === i,
+      );
+      const packs = await Promise.all(
+        paths.map((p) =>
+          evalExpr(rpc, p, "ListCollections()")
+            .then(parseFactoryCollectionLines)
+            .catch(() => [] as ChainCollection[]),
+        ),
+      );
+      const bySlug = new Map<string, ChainCollection>();
+      for (const row of packs.flat()) bySlug.set(row.slug, row);
+      return [...bySlug.values()];
+    })();
+    const openTask = isPkgPath(nftPath)
+      ? loadListOpen(rpc, nftPath)
+          .then((rows) => ({ rows, error: "" }))
+          .catch((e) => ({
+            rows: [] as Item[],
+            error: e instanceof Error ? e.message : "Could not read listings from this package path.",
+          }))
+      : Promise.resolve({ rows: [] as Item[], error: "Set a valid NFT package path in Settings." });
+
+    const [factoryCols, openResult] = await Promise.all([factoryTask, openTask]);
+
+    async function nftExtras() {
+      try {
+        if (factoryPath) {
+          setLaunchFeeUgnot(parseEvalInt(await evalExpr(rpc, factoryPath, "LaunchFee()")));
+        } else if (isPkgPath(nftPath)) {
+          setLaunchFeeUgnot(parseEvalInt(await evalExpr(rpc, nftPath, "LaunchFee()")));
+        } else {
+          setLaunchFeeUgnot(1_000_000_000);
+        }
+      } catch {
+        setLaunchFeeUgnot(1_000_000_000);
+      }
+      try {
+        if (factoryPath) {
+          setAdminAddr(parseEvalString(await evalExpr(rpc, factoryPath, "Admin()")));
+        } else if (isPkgPath(nftPath)) {
+          setAdminAddr(parseEvalString(await evalExpr(rpc, nftPath, "Admin()")));
+        } else {
+          setAdminAddr("");
+        }
+      } catch {
+        setAdminAddr("");
+      }
+      if (!isPkgPath(nftPath)) {
+        setHasOffers(false);
+        setHasPool(false);
+        setFeaturedSlugs([]);
+        return;
+      }
+      try {
+        await evalExpr(rpc, nftPath, `ListOffers("bazaar")`);
+        setHasOffers(true);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        setHasOffers(!isNameNotDeclared(raw));
+      }
+      try {
+        await evalExpr(rpc, nftPath, `PoolOf("bazaar")`);
+        setHasPool(true);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        setHasPool(!isNameNotDeclared(raw));
+      }
+      try {
+        setFeaturedSlugs(parseFeaturedLines(await evalExpr(rpc, nftPath, "Featured()")));
+      } catch {
+        setFeaturedSlugs([]);
+      }
+    }
+
+    if (factoryCols.length > 0) {
+      setChainCollections(factoryCols);
+      const openLists = await Promise.all(
+        factoryCols.map(async (col) => {
+          if (!col.pkg || !isPkgPath(col.pkg)) return [] as Item[];
+          try {
+            return tagCollectionSlug(await loadListOpen(rpc, col.pkg), col.slug);
+          } catch {
+            return [];
+          }
+        }),
+      );
+      const open = openLists.flat();
+      setItems(open);
+      setHomeActivity(null);
+      if (account?.address) {
+        const packs = await Promise.all(
+          factoryCols.map(async (col) => {
+            if (!col.pkg || !isPkgPath(col.pkg)) return [] as Item[];
+            const listed = open.filter((row) => itemCollectionSlug(row) === col.slug);
+            try {
+              return tagCollectionSlug(await loadHoldings(rpc, col.pkg, account.address, listed), col.slug);
+            } catch {
+              return listed
+                .filter((row) => row.seller === account.address)
+                .map((row) => ({ ...row, listed: true }));
+            }
+          }),
+        );
+        const byKey = new Map<string, Item>();
+        for (const row of packs.flat()) byKey.set(itemRowKey(row), row);
+        setOwned([...byKey.values()]);
+      } else {
+        setOwned([]);
+      }
+      await nftExtras();
+      setFeaturedSlugs(
+        factoryCols.filter((col) => col.maxSupply === 0 || col.minted < col.maxSupply).map((col) => col.slug),
+      );
+      setLoading(false);
+      return;
+    }
+
     if (!isPkgPath(nftPath)) {
       setItems([]);
       setOwned([]);
@@ -175,21 +358,20 @@ export function App() {
       setLoading(false);
       return;
     }
-    let open: Item[] = [];
-    try {
-      const openRaw = await evalExpr(rpc, nftPath, "ListOpen()");
-      open = parseItems(openRaw);
-      setItems(open);
-    } catch (e) {
+    if (openResult.error) {
       setItems([]);
       setOwned([]);
       setChainCollections([]);
       setHomeActivity(null);
-      const raw = e instanceof Error ? e.message : "Could not read listings from this package path.";
-      setChainNote(raw.startsWith("Could not read") ? raw : `Could not read listings: ${raw}`);
+      const raw = openResult.error;
+      setChainNote(
+        raw.startsWith("Could not read") || raw.startsWith("Set a valid") ? raw : `Could not read listings: ${raw}`,
+      );
       setLoading(false);
       return;
     }
+    const open = openResult.rows;
+    setItems(open);
     try {
       const colRaw = await evalExpr(rpc, nftPath, "ListCollections()");
       setChainCollections(parseCollectionLines(colRaw));
@@ -212,32 +394,9 @@ export function App() {
     } else {
       setOwned([]);
     }
-    try {
-      await evalExpr(rpc, nftPath, `ListOffers("bazaar")`);
-      setHasOffers(true);
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      setHasOffers(!isNameNotDeclared(raw));
-    }
-    try {
-      await evalExpr(rpc, nftPath, `PoolOf("bazaar")`);
-      setHasPool(true);
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      setHasPool(!isNameNotDeclared(raw));
-    }
-    try {
-      setLaunchFeeUgnot(parseEvalInt(await evalExpr(rpc, nftPath, "LaunchFee()")));
-    } catch {
-      setLaunchFeeUgnot(1_000_000_000);
-    }
-    try {
-      setAdminAddr(parseEvalString(await evalExpr(rpc, nftPath, "Admin()")));
-    } catch {
-      setAdminAddr("");
-    }
+    await nftExtras();
     setLoading(false);
-  }, [hub, nft, rpc, account?.address]);
+  }, [hub, nft, factory, rpc, account?.address]);
 
   useEffect(() => {
     if (!profileAddr || !isPkgPath(nft) || sameAddr(profileAddr, account?.address)) {
@@ -355,17 +514,46 @@ export function App() {
   }, [mintSlug, nft, rpc, items]);
 
   useEffect(() => {
+    const col = chainCollections.find((c) => c.slug === mintSlug);
+    const pkg = col?.pkg && isPkgPath(col.pkg) ? normalizePkgPath(col.pkg) : "";
+    const minted = col?.minted || col?.count || 0;
+    if (!mintSlug || !pkg || minted < 1) {
+      setMintTokenURI("");
+      return;
+    }
+    let live = true;
+    void evalExpr(rpc, pkg, `TokenURI(${minted})`)
+      .then((raw) => {
+        if (live) setMintTokenURI(raw);
+      })
+      .catch(() => {
+        if (!live) return;
+        void evalExpr(rpc, pkg, "TokenURI(1)")
+          .then((raw) => {
+            if (live) setMintTokenURI(raw);
+          })
+          .catch(() => {
+            if (live) setMintTokenURI("");
+          });
+      });
+    return () => {
+      live = false;
+    };
+  }, [mintSlug, chainCollections, rpc, items]);
+
+  useEffect(() => {
     saveHub(hub);
     saveNft(nft);
+    saveFactory(factory);
     saveNetwork(net.id);
-  }, [hub, nft, net.id]);
+  }, [hub, nft, factory, net.id]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!collectionSlug || !isPkgPath(nft)) {
+    function clearCollection() {
       setCollectionItems(null);
       setCollectionActivity(null);
       setCollectionOffers([]);
@@ -373,11 +561,44 @@ export function App() {
       setCollectionPoolNfts([]);
       setCollectionPoolShares(0);
       setCollectionSocials({ website: "", twitter: "", discord: "" });
+    }
+    if (!collectionSlug) {
+      clearCollection();
+      return;
+    }
+    const col = chainCollections.find((c) => c.slug === collectionSlug);
+    const book = collectionBookPath(collectionSlug, chainCollections, nft);
+    const factoryBook = !!(col?.pkg && isPkgPath(col.pkg));
+    if (!isPkgPath(book)) {
+      clearCollection();
       return;
     }
     let live = true;
     const arg = JSON.stringify(collectionSlug);
     void (async () => {
+      if (factoryBook) {
+        const minted = col?.minted || col?.count || 0;
+        const nextItems = await loadCollectionBook(rpc, book, collectionSlug, minted);
+        let nextActivity: Activity[] = [];
+        try {
+          nextActivity = parseActivityLines(await evalExpr(rpc, book, "Activity()")).map((row) => ({
+            ...row,
+            preview: false,
+            source: "on-chain" as const,
+          }));
+        } catch {
+          nextActivity = [];
+        }
+        if (!live) return;
+        setCollectionItems(nextItems);
+        setCollectionActivity(nextActivity);
+        setCollectionOffers([]);
+        setCollectionPool(null);
+        setCollectionPoolNfts([]);
+        setCollectionPoolShares(0);
+        setCollectionSocials({ website: "", twitter: "", discord: "" });
+        return;
+      }
       const itemsTask = (async () => {
         for (const expr of [`ListItemsByCollection(${arg})`, `ListByCollection(${arg})`]) {
           try {
@@ -461,7 +682,7 @@ export function App() {
     return () => {
       live = false;
     };
-  }, [collectionSlug, nft, rpc, items, account?.address]);
+  }, [collectionSlug, nft, chainCollections, rpc, items, account?.address]);
 
   function writeHash(next: string) {
     const cur = window.location.hash === "#" ? "" : window.location.hash || "";
@@ -608,17 +829,27 @@ export function App() {
     }
   }
 
-  async function call(func: string, args: string[], send = ""): Promise<boolean> {
+  function bookOf(slug: string): string {
+    return collectionBookPath(slug, chainCollections, nft);
+  }
+
+  function factoryPkgOf(slug: string): string {
+    const pkg = collectionBookPath(slug, chainCollections, "");
+    return isPkgPath(pkg) ? pkg : "";
+  }
+
+  async function call(func: string, args: string[], send = "", pkgPath?: string): Promise<boolean> {
     setBusy(func);
     setErr("");
     setMsg("");
     try {
       if (!account) throw new Error("Connect Adena first.");
       if (wrongNet) throw new Error(`Switch Adena to ${net.chainName} (${net.chainId}).`);
-      if (!isPkgPath(nft)) throw new Error("Set a valid NFT package path.");
+      const path = normalizePkgPath(pkgPath || nft);
+      if (!isPkgPath(path)) throw new Error("Set a valid NFT package path.");
       const res = await doContractCall({
         caller: account.address,
-        pkgPath: nft,
+        pkgPath: path,
         func,
         args,
         send,
@@ -635,50 +866,106 @@ export function App() {
     }
   }
 
+  async function copyLocalCollection(slug: string): Promise<string> {
+    const helperErr =
+      "Local gnodev helper is required. Run npm run dev so POST /local/new-col can copy the collection realm.";
+    let res: Response;
+    try {
+      res = await fetch("/local/new-col", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+    } catch {
+      throw new Error(helperErr);
+    }
+    if (res.status === 404) throw new Error(helperErr);
+    let data: { ok?: boolean; error?: string; pkg?: string } = {};
+    try {
+      data = (await res.json()) as { ok?: boolean; error?: string; pkg?: string };
+    } catch {
+      data = {};
+    }
+    if (!res.ok) {
+      throw new Error(data.error || `Could not copy collection realm (${res.status}).`);
+    }
+    const pkg = data.pkg ? normalizePkgPath(data.pkg) : collectionRealmPath(slug, "local");
+    if (!isPkgPath(pkg)) throw new Error("Local helper did not return a collection package path.");
+    return pkg;
+  }
+
+  async function collectionRealmOnChain(pkg: string): Promise<boolean> {
+    let undeclared = false;
+    for (const expr of ["GrcName()", "Creator()"]) {
+      try {
+        await evalExpr(rpc, pkg, expr);
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/call Init first/i.test(msg)) return true;
+        if (isNameNotDeclared(msg)) {
+          undeclared = true;
+          continue;
+        }
+        if (isRealmUnavailable(msg) || /package not found|not on this chain yet/i.test(msg)) {
+          return false;
+        }
+        return true;
+      }
+    }
+    return undeclared;
+  }
+
+  async function launchSendFor(slug: string): Promise<string> {
+    const fee = launchFeeUgnot > 0 ? `${launchFeeUgnot}ugnot` : "";
+    const factoryPath = isPkgPath(factory) ? normalizePkgPath(factory) : "";
+    if (!factoryPath) return fee;
+    try {
+      const raw = await evalExpr(rpc, factoryPath, `ReservedCreator(${JSON.stringify(slug)})`);
+      const reserved = parseEvalString(raw).trim();
+      if (reserved) return "";
+      return fee;
+    } catch {
+      return fee;
+    }
+  }
+
   async function launchWizard(plan: LaunchPlan) {
-    const created = plan.extras
-      ? await call(
-          "LaunchCollection",
-          [
-            plan.slug,
-            plan.name,
-            plan.cover,
-            plan.bio,
-            plan.website,
-            plan.twitter,
-            plan.discord,
-            plan.maxSupply,
-            plan.priceUgnot,
-          ],
-          launchFeeUgnot > 0 ? `${launchFeeUgnot}ugnot` : "",
-        )
-      : await call(
-          "CreateDrop",
-          [plan.slug, plan.name, plan.cover, plan.maxSupply, plan.priceUgnot],
-          launchFeeUgnot > 0 ? `${launchFeeUgnot}ugnot` : "",
-        );
+    setBusy("Init");
+    setErr("");
+    setMsg("");
+    let pkg = collectionRealmPath(plan.slug, net.id);
+    if (net.id === "local") {
+      try {
+        pkg = await copyLocalCollection(plan.slug);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+        setBusy("");
+        return;
+      }
+    } else {
+      const onChain = await collectionRealmOnChain(pkg);
+      if (!onChain) {
+        setErr("This collection realm is not on chain yet. Ask Bazaar to addpkg, then Initialize.");
+        setBusy("");
+        return;
+      }
+    }
+    const send = await launchSendFor(plan.slug);
+    const created = await call(
+      "Init",
+      [plan.name, plan.slug, plan.cover, plan.maxSupply, plan.priceUgnot, String(plan.royaltyBps)],
+      send,
+      pkg,
+    );
     if (!created) return;
     if (plan.blob) {
       const lines = plan.blob.split("\n").filter(Boolean);
       for (let i = 0; i < lines.length; i += DROP_ADD_CAP) {
         const chunk = lines.slice(i, i + DROP_ADD_CAP).join("\n");
-        if (!(await call("AddDropItems", [plan.slug, chunk]))) return;
+        if (!(await call("AddDropItems", [chunk], "", pkg))) return;
       }
-      if (plan.hide) await call("SetHidden", [plan.slug, "true"]);
     }
-    if (plan.royaltyBps > 0 || plan.wlSupply > 0) {
-      if (
-        !(await call("SetDropSale", [
-          plan.slug,
-          String(plan.royaltyBps),
-          plan.wlPriceUgnot,
-          String(plan.wlSupply),
-        ]))
-      )
-        return;
-    }
-    if (plan.allow) await call("AddAllowlist", [plan.slug, plan.allow]);
-    if (plan.cap > 0) await call("SetMintCap", [plan.slug, String(plan.cap)]);
     onOpenMint(plan.slug);
   }
 
@@ -713,7 +1000,7 @@ export function App() {
           setViewProfile(chain);
         }
       } catch {
-        /* nftv5 has no ProfileOf */
+        /* ProfileOf is optional on the book */
       }
     })();
     return () => {
@@ -767,7 +1054,7 @@ export function App() {
       setErr("This is your listing. Connect a different Adena account to buy, or Cancel.");
       return;
     }
-    void call("Buy", [row.id], `${row.price}ugnot`);
+    void call("Buy", [row.id], `${row.price}ugnot`, bookOf(itemCollectionSlug(row)));
   }
 
   function onSell(row: Item) {
@@ -778,9 +1065,11 @@ export function App() {
 
   function onSubmitList() {
     const price = String(ugnotFromGnot(listPrice));
-    const listed = owned.find((row) => row.id === listId && row.listed);
-    if (listed) void call("UpdatePrice", [listId, price]);
-    else void call("List", [listId, price]);
+    const row = owned.find((it) => it.id === listId);
+    const pkg = row ? bookOf(itemCollectionSlug(row)) : nft;
+    const listed = row?.listed;
+    if (listed) void call("UpdatePrice", [listId, price], "", pkg);
+    else void call("List", [listId, price], "", pkg);
   }
 
   function onPickNetwork(id: string) {
@@ -807,6 +1096,7 @@ export function App() {
         network={net}
         onNetwork={onPickNetwork}
         onProfile={account?.address ? () => onOpenProfile(account.address) : undefined}
+        isAdmin={connected && sameAddr(account?.address, adminAddr)}
       />
       <Notices
         wrongNet={wrongNet}
@@ -829,6 +1119,7 @@ export function App() {
             collectionPoolShares={collectionPoolShares}
             collectionSocials={collectionSocials}
             homeActivity={homeActivity}
+            featuredSlugs={featuredSlugs}
             slug={collectionSlug}
             onSlug={onSlug}
             itemId={openItemId}
@@ -843,7 +1134,7 @@ export function App() {
             onOpenTab={goTab}
             onBuy={onBuy}
             onSell={onSell}
-            onCancel={(row) => void call("Cancel", [row.id])}
+            onCancel={(row) => void call("Cancel", [row.id], "", bookOf(itemCollectionSlug(row)))}
             onConnect={() => void onConnect()}
             wallet={account?.address}
             onOffer={hasOffers ? (id, ugnot) => void call("Offer", [id], `${ugnot}ugnot`) : undefined}
@@ -864,7 +1155,13 @@ export function App() {
             onSweep={(ids, ugnot) => void call("Sweep", [ids.join(",")], `${ugnot}ugnot`)}
             cart={cart}
             onCart={onCart}
-            onReveal={(id) => void call("Reveal", [id])}
+            onReveal={(id) => {
+              const row =
+                items.find((it) => it.id === id) ||
+                collectionItems?.find((it) => it.id === id) ||
+                owned.find((it) => it.id === id);
+              void call("Reveal", [id], "", row ? bookOf(itemCollectionSlug(row)) : nft);
+            }}
             onOpenMint={onOpenMint}
             hasOffers={hasOffers}
             hasPool={hasPool}
@@ -895,6 +1192,7 @@ export function App() {
             allowN={mintAllowN}
             mintCap={mintCap}
             sale={mintSale}
+            tokenURI={mintTokenURI}
             connected={connected}
             blocked={blocked}
             busy={!!busy}
@@ -902,7 +1200,8 @@ export function App() {
               const drop = chainCollections.find((c) => c.slug === mintSlug);
               const pay =
                 mintSale?.phase === "whitelist" ? mintSale.wlPrice : drop?.mintPrice || mintSale?.mintPrice || 0;
-              void call("PublicMint", [mintSlug], `${pay}ugnot`);
+              const pkg = factoryPkgOf(mintSlug);
+              void call("PublicMint", pkg ? [] : [mintSlug], pay > 0 ? `${pay}ugnot` : "", pkg || nft);
             }}
             onConnect={() => void onConnect()}
             onOpenCollection={() => onSlug(mintSlug)}
@@ -916,17 +1215,58 @@ export function App() {
             blocked={blocked}
             busy={!!busy}
             wallet={account?.address}
-            onCreateDrop={(args) => void call("CreateDrop", args, launchFeeUgnot > 0 ? `${launchFeeUgnot}ugnot` : "")}
+            onCreateDrop={(args) => void launchWizard({
+              slug: args[0] || "",
+              name: args[1] || "",
+              cover: args[2] || "",
+              bio: "",
+              website: "",
+              twitter: "",
+              discord: "",
+              extras: false,
+              maxSupply: args[3] || "0",
+              priceUgnot: args[4] || "0",
+              blob: "",
+              hide: false,
+              allow: "",
+              cap: 0,
+              royaltyBps: 0,
+              wlPriceUgnot: "0",
+              wlSupply: 0,
+            })}
             onLaunchCollection={(args) =>
-              void call("LaunchCollection", args, launchFeeUgnot > 0 ? `${launchFeeUgnot}ugnot` : "")
+              void launchWizard({
+                slug: args[0] || "",
+                name: args[1] || "",
+                cover: args[2] || "",
+                bio: args[3] || "",
+                website: args[4] || "",
+                twitter: args[5] || "",
+                discord: args[6] || "",
+                extras: true,
+                maxSupply: args[7] || "0",
+                priceUgnot: args[8] || "0",
+                blob: "",
+                hide: false,
+                allow: "",
+                cap: 0,
+                royaltyBps: 0,
+                wlPriceUgnot: "0",
+                wlSupply: 0,
+              })
             }
-            onMintUnique={(slug, name, image) =>
-              void call(slug ? "MintIn" : "Mint", slug ? [slug, name, image] : [name, image])
-            }
+            onMintUnique={(slug, name, image) => {
+              const pkg = slug ? factoryPkgOf(slug) : "";
+              if (pkg) void call("Mint", [name, image], "", pkg);
+              else void call(slug ? "MintIn" : "Mint", slug ? [slug, name, image] : [name, image]);
+            }}
             onConnect={() => void onConnect()}
             dropSlots={dropSlots}
             onPickDrop={setSlotSlug}
-            onAddDropItems={(slug, blob) => void call("AddDropItems", [slug, blob])}
+            onAddDropItems={(slug, blob) => {
+              const pkg = factoryPkgOf(slug);
+              void call("AddDropItems", pkg ? [blob] : [slug, blob], "", pkg || nft);
+            }}
             onSetHidden={(slug, hidden) => void call("SetHidden", [slug, hidden ? "true" : "false"])}
             dropHidden={dropHidden}
             dropLoaded={dropLoaded}
@@ -934,14 +1274,21 @@ export function App() {
             dropMintCap={dropMintCap}
             onOpenMint={onOpenMint}
             onOpenCollection={onSlug}
-            onPauseMint={(slug) => void call("PauseMint", [slug])}
-            onResumeMint={(slug) => void call("ResumeMint", [slug])}
+            onPauseMint={(slug) => {
+              const pkg = factoryPkgOf(slug);
+              void call("PauseMint", pkg ? [] : [slug], "", pkg || nft);
+            }}
+            onResumeMint={(slug) => {
+              const pkg = factoryPkgOf(slug);
+              void call("ResumeMint", pkg ? [] : [slug], "", pkg || nft);
+            }}
             onSetMintPrice={(slug, ugnot) => void call("SetMintPrice", [slug, String(ugnot)])}
             onAddAllowlist={(slug, blob) => void call("AddAllowlist", [slug, blob])}
             onSetMintCap={(slug, n) => void call("SetMintCap", [slug, String(n)])}
             onStartPublic={(slug) => void call("StartPublic", [slug])}
             onLaunchWizard={(plan: LaunchPlan) => void launchWizard(plan)}
             launchFeeUgnot={launchFeeUgnot}
+            network={net.id}
           />
         ) : null}
         {tab === "portfolio" ? (
@@ -957,7 +1304,7 @@ export function App() {
             busy={!!busy}
             loading={profileLoading}
             onConnect={() => void onConnect()}
-            onCancel={(row) => void call("Cancel", [row.id])}
+            onCancel={(row) => void call("Cancel", [row.id], "", bookOf(itemCollectionSlug(row)))}
             onOpenTab={goTab}
             onOpenItem={(item) => {
               if (item.id) onItemId(item.id);
@@ -966,28 +1313,56 @@ export function App() {
             onOpenMint={onOpenMint}
             onBuy={onBuy}
             onSell={onSell}
-            onTransfer={(id, to) => void call("Transfer", [to, id])}
-            onReveal={(id) => void call("Reveal", [id])}
+            onTransfer={(id, to) => {
+              const row = owned.find((it) => it.id === id) || profileItems.find((it) => it.id === id);
+              void call("Transfer", [to, id], "", row ? bookOf(itemCollectionSlug(row)) : nft);
+            }}
+            onReveal={(id) => {
+              const row =
+                owned.find((it) => it.id === id) ||
+                items.find((it) => it.id === id) ||
+                collectionItems?.find((it) => it.id === id);
+              void call("Reveal", [id], "", row ? bookOf(itemCollectionSlug(row)) : nft);
+            }}
             userProfile={viewProfile}
             onSaveProfile={mineProfile ? saveUserProfile : undefined}
           />
+        ) : null}
+        {tab === "guide" ? (
+          <Guide network={net} onTab={goTab} onExploreHome={onExploreHome} />
         ) : null}
         {tab === "settings" ? (
           <Settings
             hub={hub}
             nft={nft}
+            factory={factory}
             connected={connected}
             blocked={blocked}
             busy={!!busy}
             onHub={setHub}
             onNft={setNft}
+            onFactory={setFactory}
             onConnect={() => void onConnect()}
             onSeed={() => void call("SeedSamples", [])}
             network={net}
             onNetwork={onPickNetwork}
             isAdmin={sameAddr(account?.address, adminAddr)}
             launchFeeUgnot={launchFeeUgnot}
-            onSetLaunchFee={(ugnot) => void call("SetLaunchFee", [String(ugnot)])}
+            onSetLaunchFee={(ugnot) =>
+              void call("SetLaunchFee", [String(ugnot)], "", isPkgPath(factory) ? factory : nft)
+            }
+          />
+        ) : null}
+        {tab === "admin" ? (
+          <Admin
+            allowed={connected && sameAddr(account?.address, adminAddr)}
+            connected={connected}
+            blocked={blocked}
+            busy={!!busy}
+            drops={chainCollections}
+            featured={featuredSlugs}
+            onSave={(slugs) => void call("SetFeatured", [slugs.join(",")])}
+            onConnect={() => void onConnect()}
           />
         ) : null}
       </main>

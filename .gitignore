@@ -23,3 +23,10 @@ __pycache__/
 *.pem
 *.key
 coverage/
+
+gno.land/r/bazaar/c/
+tools/pearl-demo*.ps1
+tools/pearl-ember*
+tools/pearl-foam*
+tools/pearl-glow*
+tools/pearl-nftv7-featured.ps1

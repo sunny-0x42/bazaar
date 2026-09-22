@@ -4,6 +4,8 @@ import {
   type CollectionMarket,
   type ExploreCollection,
 } from "../lib/catalog";
+import { shortPkgPath } from "../lib/chain";
+import { CopyLine } from "./CopyLine";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
 
@@ -78,7 +80,12 @@ export function CollectionTable({ collections, markets, sort, dir, onSort, onOpe
                     <span className="market-thumb">
                       <ItemArt name={col.name} image={col.cover} alt="" />
                     </span>
-                    <strong>{col.name}</strong>
+                    <span className="market-col-copy">
+                      <strong>{col.name}</strong>
+                      {col.pkg ? (
+                        <CopyLine display={shortPkgPath(col.pkg)} value={col.pkg} />
+                      ) : null}
+                    </span>
                   </span>
                 </td>
                 <td className="num">{m && m.floor > 0 ? <PriceMark ugnot={m.floor} /> : "—"}</td>
