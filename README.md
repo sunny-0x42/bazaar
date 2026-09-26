@@ -2,7 +2,6 @@
 
 Fixed-price **NFT marketplace and collection launchpad** on [gno.land](https://gno.land). Launch a drop, mint in GNOT, then list and buy on the secondary book.
 
-This is not a DEX, not gnomi.fun, and not the Gnomies collection.
 
 **Pearl testnet.** Coins have no market value. Nothing here is investment advice.
 
