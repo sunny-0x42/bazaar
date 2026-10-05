@@ -1,46 +1,20 @@
 # Bazaar API
 
-Default product is the **NFT book** (`docs/NFT.md`, `gno.land/r/bazaar/nft`). The GRC20 factory book below is **legacy**.
+Default product: one collection realm registered on **bazaarv5**. Hub `GetModule("nft")` is not used on the production UI.
 
-Local package paths (gnodev / tests). On Pearl they deploy under `gno.land/r/<g1>/bazaar/…`. The UI resolves `GetModule("nft")` first, then `GetModule("market")`.
+Live factory: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 
-## Hub `gno.land/r/bazaar`
+Site: https://bazaar.gnomi.fun
 
-| Func | Who | Notes |
-| --- | --- | --- |
-| `Init(cur)` | first EOA | once |
-| `SetModule(cur, name, path)` | admin | `market` now; later `nft` |
-| `GetModule(name) string` | anyone | empty if missing |
-| `ListModules() string` | anyone | `name\|path` lines |
-| `AddAdmin` / `RemoveAdmin` / `IsAdmin` | admin | cannot remove last admin |
-| `Render(path)` | gnoweb | |
+Collection reads: `ListOpen`, `ItemLine`, `Name`, `Symbol`, `OwnerOf("1")` as `(address, error)`, `TokenURI("1")`, `TokensOf`. Writes: `List`, `Buy`, `Cancel`, `Transfer`, `PublicMint`, `Mint`.
 
-## Market `gno.land/r/bazaar/market`
-
-Factory + book in one realm so a listing can escrow the same GRC20 without a compile-time import of a foreign token. Upgrade by deploying `marketv2` and `SetModule("market", newPath)`.
-
-Fee: 50 bps of `price` ugnot. Seller receives `price - fee`.
-
-| Func | Who | Notes |
-| --- | --- | --- |
-| `Init(cur)` | first EOA | admin = caller |
-| `Create(cur, name, symbol, decimals, supply)` | EOA | mints `supply` to creator; symbol 2–8 A–Z0–9, unique |
-| `Transfer` / `Approve` / `TransferFrom` | holder / spender | standard GRC20 |
-| `BalanceOf` / `TotalSupply` / `Meta` / `ListSymbols` | read | |
-| `List(cur, symbol, amount, priceUgnot)` | EOA | pulls tokens from caller into escrow |
-| `Buy(cur, id)` | EOA | `OriginSend` must equal `price` ugnot |
-| `Cancel(cur, id)` | seller | returns escrow |
-| `WithdrawFees(cur)` | admin | protocol ugnot |
-| `TransferAdmin(cur, next)` | admin | rotate fee admin |
-| `GetListing(id) string` | read | `id\|symbol\|seller\|amount\|price\|status` |
-| `ListOpen() string` | read | open rows |
-| `ListingCount() int` / `ProtocolBps() int64` / `ProtocolFees() int64` | read | |
-
-Statuses: `open`, `sold`, `cancelled`.
+`Buy` fee, read from the factory on 2026-10-05: `ProtocolBps()` is 200, minus the higher `HolderDiscount` of seller or buyer, floored at 0. Royalty is `RoyaltyBps` of the price, to the creator. Of the protocol fee, 11% (`GenesisShareBps()` 1100) goes to `perk2`. The rest goes to `ProtocolSink()`. The seller receives `price − protocol − royalty`.
 
 ## UI flow
 
-1. Connect Adena on Pearl (or local gnodev).
-2. Create token → List (no separate Approve; List pulls from the caller).
-3. Buyer: Buy with exact GNOT (`send = price ugnot`).
-4. Seller may Cancel while `open`.
+1. Connect Adena on mainnet (`gnoland-1`).
+2. Launch: `addpkg` a retargeted `col`, `Reserve` on bazaarv5, `Init` with an empty send. Collectors `PublicMint`.
+3. Sell calls `List` (escrow). Buy sends the exact list price.
+4. The seller may `Cancel` while the id is listed.
+
+Hub `SetModule` and the GRC20 `market` book are legacy. See [STANDARDS.md](STANDARDS.md).

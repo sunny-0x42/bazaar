@@ -1,67 +1,61 @@
-# Local launchpad factory (per-realm collections)
+# Collection factory (one realm per collection)
 
-**This is the local launchpad factory.** Each collection is its **own Gno realm** (`gno.land/r/bazaar/c/<slug>`), not a slug inside nftv7.
+Each collection is its own Gno realm, not a slug inside nftv7.
 
-Pearl factory with **Reserve**: `…/bazaar/factoryv3`. Live catalog still merges `factoryv2` (foam/mist). Frozen `factory` / `factoryv2` are not overwritten. New cols: `Reserve` (pay fee) → `pearl-new-col.ps1` → Adena `Init` with **empty send**. nftv7 remains the old in-realm pad.
+## Mainnet
 
-Gno cannot `MsgAddPackage` from a realm. Adena cannot `addpkg`. Copy/addpkg the `col` template, then `Init`.
+Factory: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 
-`TokenURI(id)` after mint is a `data:application/json` ERC-721 document (`name`, `description`, `image`, `attributes`). Foam (older addpkg) still returns a bare image URL. New `pearl-new-col` instances use JSON. The GRC721 `metadata` extension is attached at `Init`.
+Create path: copy `gno.land/r/bazaar/col`, retarget imports ([listing-external.md](listing-external.md)), `addpkg`, **Reserve**, then `Init` with an empty send. `Register` runs inside `Init`. Adena cannot `addpkg`.
+
+- `LaunchFee()` is 1000 GNOT (`1000000000ugnot`) as read on 2026-10-05. A normal account sends that on `Reserve`. `ReserveDue` for the factory admin is 0. Admin `SetLaunchFee` changes the next Reserve. `CancelReserve` returns the ugnot that Reserve locked.
+- `Init` without a matching Reserve panics `col: reserve first` on the current template. The live factory has no `CreditLaunchFee`. The committed `col` sample still calls `CreditLaunchFee`; replace that before `addpkg`.
+- `Withdraw` sends spendable ugnot on the factory (`balance − sum of open reserves`) to the admin.
+- `Buy` on a collection that imports this factory uses `ProtocolBps()` (**200**). Admin `SetProtocolBps` accepts 0–500. After `HolderDiscount`, `GenesisShareBps()` (**1100**, 11% of the protocol fee) goes to `GenesisSink()` (`perk2`). The rest goes to `ProtocolSink()`.
+- Older packages `bazaarv1`, `bazaarv2`, `bazaarv3`, `bazaarv4`, and Pearl `factoryv3` / `nftv7` stay on their chains. A new collection registers here.
+
+Source package in this repo is `gno.land/r/bazaar/factory`. The mainnet deploy name is `bazaarv5`.
+
+## Adena
+
+The live template imports genesis `gno.land/p/nt/grc721/v0`. `OwnerOf(tid string) (address, error)`. `List` escrows the token to the collection realm. See [adena-collectables.md](adena-collectables.md).
 
 ## Realms
 
 | Path | Role |
 | --- | --- |
-| `gno.land/r/bazaar/factory` | Registry + launch fee. **This** local factory. |
-| `gno.land/r/bazaar/col` | Template collection (copy; do not launch this path as a product collection) |
-| `gno.land/r/bazaar/c/<slug>` | One collection instance (`package <slug>`) |
+| `gno.land/r/bazaar/factory` | Factory source |
+| `gno.land/r/…/bazaar/bazaarv5` | Live mainnet factory |
+| `gno.land/r/bazaar/col` | Template. Do not launch this path as a product collection. |
+| `gno.land/r/<g1>/…/<slug>` | One collection. `package` name = slug. |
 
-Factory does **not** import collection packages (future paths are unknown).
+## Launch (local gnodev)
 
-Pearl: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv7` remains the live book until Pearl factory yes.
-
-## Launch (local)
-
-1. `factory.Init` — first EOA is admin. Default `LaunchFee` = `1_000_000_000` ugnot (1000 GNOT). Admin `SetLaunchFee`.
-2. Copy template: `tools/local-new-col.ps1 -Slug <slug>`
-   - Slug = last path element of the collection pkg **and** the Gno package name: `[a-z][a-z0-9]{1,10}` (2–11 chars, GRC721 symbol max 11, no hyphen).
-3. Deploy the new pkg (gnodev extra-root picks it up). Adena cannot addpkg.
-4. Call `<slug>.Init(cur, name, symbol, cover, maxSupply, mintPriceUgnot, royaltyBps)` as EOA with **exact** `LaunchFee` ugnot (`OriginSend`). Extra denoms panic.
-   - Collection sends ugnot to `factory.Address()`, then `CreditLaunchFee` + `Register`.
-   - `Register` stores slug = last path element of the collection pkg, pkg path, creator = `Previous.Previous` EOA.
-   - Panic if slug taken or pkg already registered.
-
-`maxSupply` 0 = open edition until creator `PauseMint`.
+1. `factory.Init`. The first EOA is admin. Source default `LaunchFee` is 1000 GNOT. Tests set it to 0.
+2. Slug `[a-z][a-z0-9]{1,10}`.
+3. `Reserve` the slug, then `Init(...)` with an empty send. Fixed supply starts paused until slots exist and the creator calls `ResumeMint`. `SetDropSale`, `StartPublic`, `SetMintCap`, `SetHidden`, `Reveal`, and `AddAllowlist` live on the `col` template.
+4. `maxSupply` 0 stays an open edition until `PauseMint`.
 
 ## Drop slots
 
-`AddDropItems(cur, blob)` — creator only, no `OriginSend`. Up to 20 pipe lines: `name|image|rarity|Trait:Value;Trait:Value`. Appends slots; `loaded` cannot exceed `maxSupply` (or 10_000 if open edition). Empty loaded = numbered edition mint.
+`AddDropItems(cur, blob)` is creator-only and takes no `OriginSend`. Up to 20 lines: `name|image|rarity|Trait:Value;Trait:Value`.
 
-`PublicMint(cur)` — if `loaded > 0`, consume the next slot (name, image, rarity, traits). Panic `col: no slot` when `minted >= loaded`. Else name `{collection} #{n}`, image `/samples/{slug}-0{n}.png` or cover.
+`PublicMint(cur)` consumes the next slot when `loaded > 0`.
 
-## Reads (UI / Adena)
+## Reads
 
-Factory `ListCollections()` lines:
+`ListCollections()` lines:
 
 ```
-slug|name|cover|pkg|mintPrice|maxSupply|minted|creator
+slug|name|cover|pkg|mintPrice|maxSupply|minted|creator|addr|royaltyBps
 ```
 
-`CollectionOf(slug)` → collection pkg path.
+The public UI reads `bazaarv5` and still merges `bazaarv2`, `bazaarv1`, and `factory`. Hidden slugs: `test`, `stdcol`, `adcol`, `col3333`, `shown`.
 
-Collection reads match the nft book so the UI can reuse them: `ItemLine`, `ListOpen`, `NextID`, `TokenURI`, `GrcName`, `GrcSymbol`, `GrcOwnerOf`, `GrcBalanceOf`, `OwnerOf`, `PriceOf`, `ListDropSlots`, `LoadedOf`.
-
-Adena **Add collectable** = the **collection pkg path** (`gno.land/r/bazaar/c/<slug>`), not the factory and not `nftv7`.
+Adena’s collectable is the **collection pkg**, not the factory.
 
 ## Money
 
-- Primary `PublicMint`: exact `mintPrice` ugnot, 0 protocol fee, GNOT to creator.
-- Secondary `List` / `UpdatePrice` / `Cancel` / `Buy`: escrow is GRC721 `TransferFrom` owner→realm on List, realm→buyer on Buy. Buy: 50 bps protocol (`fee.ProtocolFee`) to factory, `royaltyBps` to creator, rest to seller.
-- Fail-closed: `panic`, not `error`. `requireUser` = `cur.Previous().IsUserCall()`.
-- Factory admin `Withdraw` sends accumulated ugnot (launch fees + protocol) to admin.
-
-## Sample
-
-`gno.land/r/bazaar/c/demo` (`package demo`) is the gnodev sample instance of the template.
-
-Skip pool / offers / sweep / whitelist in this local v1.
+- Primary `PublicMint`: exact mint price, 0 protocol, GNOT to the creator.
+- Secondary: `List` escrows the GRC721 to the realm. `Buy` pays seller, royalty, `ProtocolSink`, and `GenesisSink`. Missing payment or a bad caller panics.
+- The collection page has no Pool tab.

@@ -1,30 +1,27 @@
 # How a project launches or lists on Bazaar
 
-Gno cannot `TransferFrom` an unknown GRC721 at runtime. Pearl has no `p/demo/tokens/grc721`. So listing is **not** “paste a contract address” like OpenSea.
+Gno cannot `TransferFrom` an unknown GRC721 at runtime. Listing is not “paste a contract address”.
 
-## Path A — Launch on our pad (default)
+Chain is mainnet `gnoland-1`. Site: https://bazaar.gnomi.fun. New collections register on `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`.
 
-Use the live realm `gno.land/r/bazaar/nft` (or the copy under `gno.land/r/<g1>/bazaar/nft` after addpkg).
+## Path A — Launch a Bazaar collection
 
-1. `CreateDrop(slug, name, cover, maxSupply, mintPriceUgnot)` — you are creator.
-2. Collectors `PublicMint(slug)` paying exact ugnot. Primary fee = 0; GNOT goes to creator.
-3. Holders `List(id, priceUgnot)` on the secondary book. Buyers `Buy(id)`. Protocol 50 bps.
+1. Copy [`gno.land/r/bazaar/col`](../gno.land/r/bazaar/col/) and apply the retarget in [listing-external.md](listing-external.md). The committed `book.gno` still hardcodes 50 bps.
+2. `addpkg` under your namespace. Adena cannot `addpkg`. Slug is the last path element: `[a-z][a-z0-9]{1,10}`.
+3. `Reserve(slug)` on `bazaarv5` with `LaunchFee()` (1000 GNOT for a normal account). Then `Init` on the collection with an empty send. `Register` runs inside `Init`.
+4. Collectors `PublicMint` paying the exact mint price. Primary protocol fee is 0.
+5. Holders `List(id, priceUgnot)`. Buyers `Buy(id)`. The protocol fee is `bazaarv5` `ProtocolBps()` (200) minus holder discount. Royalty is 0–10%. Eleven percent of the protocol fee goes to `perk2`.
 
-Template for a **standalone** drop realm (same rules, your namespace): `gno.land/p/bazaar/dropstd/v1` plus copy `r/bazaar/nft` drop+book files. Then hub `SetModule` is not required; they trade on **their** realm. To appear on **this** Explore, they still mint through Path A or Path B.
+## Path B — List an item you already own here
 
-## Path B — List an item you already own **here**
+If `OwnerOf` is your account and the item is not listed: `List`. UI: Sell.
 
-If `OwnerOf(id) == you` and not listed: `List(id, price)`. UI: Sell / Portfolio → Sell.
+## Path C — NFT from another realm
 
-## Path C — NFT from another realm (Gnomies, etc.)
+A foreign GRC721 cannot be pulled in. See [listing-external.md](listing-external.md).
 
-**Not supported as a pull listing.** The other realm would need a **push** (it imports Bazaar and calls `OpenListing`). That is a later upgrade. Until then: launch a Bazaar drop (Path A) or wait for a GRC721 registry on Pearl.
+## Eligibility
 
-## Eligibility (enforced)
-
-- Slug unique, 2–16 `[a-z0-9-]`.
-- maxSupply 1–3000 for drops.
-- List: owner EOA, price > 0 ugnot, not already listed.
-- Buy: exact OriginSend, not self-buy.
-
-`ListingRules()` on the nft realm returns a short English blurb for the UI.
+- Slug unique, `[a-z][a-z0-9]{1,10}` (2–11 characters, no hyphen).
+- List price > 0. The seller cannot buy their own listing.
+- `TransferFrom` while listed panics.

@@ -1,43 +1,47 @@
 # Bazaar
 
-Fixed-price **NFT marketplace and collection launchpad** on [gno.land](https://gno.land). Launch a drop, mint in GNOT, then list and buy on the secondary book.
+Fixed-price **NFT marketplace and collection launchpad** on [gno.land](https://gno.land) mainnet (`gnoland-1`). Launch a collection, mint in GNOT, then list and buy on the secondary book.
 
-
-**Pearl testnet.** Coins have no market value. Nothing here is investment advice.
+GNOT on mainnet has market value. Nothing here is investment advice.
 
 ## Product
 
 | | |
 | --- | --- |
-| Primary mint | 0% protocol fee — GNOT goes to the creator |
-| Create collection | Platform fee (`LaunchFee`, default 1000 GNOT; admin can change) |
-| Secondary buy / sweep / offer | **50 bps** (0.50%) of the GNOT price |
-| Wallet | [Adena](https://adena.app) |
-| Chain | Pearl (`pearl-1`) |
+| Primary mint | 0% protocol. GNOT goes to the creator. |
+| Create collection | `LaunchFee()` is **1000 GNOT**. Admin can `SetLaunchFee`. |
+| Secondary `Buy` | `ProtocolBps()` is **200** (2%). The higher `HolderDiscount` of seller or buyer is subtracted, floored at 0. Admin `SetProtocolBps` accepts 0–500. |
+| Genesis share | **11%** of that protocol fee (`GenesisShareBps()` = 1100) goes to `perk2`. The rest goes to `ProtocolSink()`. |
+| Royalty | 0–10% set at `Init`, paid on `Buy` to the collection creator |
+| List / Cancel | 0 |
+| Wallet | [Adena](https://adena.app) on mainnet |
 | Units | 1 GNOT = 1,000,000 `ugnot` |
 
-Live site: https://bazaar-gno.vercel.app
+Live site: https://bazaar.gnomi.fun
 
-Pearl factory (one collection = one realm):
+Factory for a new collection:
 
-`gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factoryv3`
+`gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 
-Faucet: https://pearl.testnets.gno.land/faucet
+Fee getters were read on 2026-10-05. Read them again before quoting a number.
 
-- [Guide](https://bazaar-gno.vercel.app/#/guide)
+- [Guide](https://bazaar.gnomi.fun/#/guide)
+- [Standards](docs/STANDARDS.md)
+- [How to list](docs/LISTING.md)
 - [List without Launch](docs/listing-external.md)
-- [Collection realm sample (own mint site)](docs/col-realm.md)
+- [Factory](docs/FACTORY.md)
+- [Collection realm](docs/col-realm.md)
 - [Adena collectables](docs/adena-collectables.md)
+
+The committed sample `gno.land/r/bazaar/col` still has the older 50 bps book. Follow [listing-external.md](docs/listing-external.md) before `addpkg`.
 
 ## Layout
 
 | Path | Role |
 | --- | --- |
-| `gno.land/p/bazaar/fee/v1` | Overflow-safe protocol fee |
-| `gno.land/r/bazaar` | Hub (`SetModule` upgrades) |
-| `gno.land/r/bazaar/nft` | Legacy slug book (nftv7 on Pearl) |
-| `gno.land/r/bazaar/factory` | Collection registry |
-| `gno.land/r/bazaar/col` | Collection realm template |
+| `gno.land/p/bazaar/fee/v1` | Overflow-safe `ProtocolFee` (mainnet copy under the deployer `g1`) |
+| `gno.land/r/bazaar/factory` | Factory source. The live mainnet deploy is `bazaarv5`. |
+| `gno.land/r/bazaar/col` | Collection template. Retarget imports before `addpkg`. |
 | `web/` | English Vite UI |
 
 ## Local UI
@@ -48,37 +52,17 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5176
-
-```bash
-cd web
-npm test
-npm run build
-```
-
-Realm tests (needs [gno](https://github.com/gnolang/gno)):
+http://127.0.0.1:5176
 
 ```bash
 gno test ./gno.land/p/bazaar/fee/v1/
-gno test ./gno.land/r/bazaar/nft/
+gno test ./gno.land/r/bazaar/factory/
+gno test ./gno.land/r/bazaar/col/
+cd web && npm test
 ```
-
-## Deploy on Vercel
-
-1. Push this repo to GitHub.
-2. [Import](https://vercel.com/new) the repo in Vercel. Project name: **bazaar**.
-3. Root Directory: leave as repo root (this `vercel.json` builds `web/`).
-4. Framework: Other / Vite. Build command and output are already set.
-5. Deploy. The app uses hash routes (`#/explore`), so no extra SPA rewrite is required.
-
-No secrets are required for a public read/trade UI. Adena signs in the browser.
 
 ## Networks
 
-- Local: `gno test` / `gnodev`
-- Public testnet: **Pearl**
-- Mainnet is out of scope for this UI
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+- Production UI: **gnoland-1**. New collections register on `bazaarv5`.
+- Local: `gno test` / `gnodev`.
+- Pearl `factoryv3` and `nftv7` stay on Pearl. They are not this site.
