@@ -2,7 +2,9 @@
 
 Bazaar is an NFT launchpad and a fixed-price secondary book on gno.land mainnet. Quote asset is native `ugnot` (UI: GNOT). Bonding-curve launch is gnomi.fun. The AMM is Zdex.
 
-Live site: https://bazaar.gnomi.fun
+Live site: https://nomaq.xyz
+
+Bazaar Gens does not render in Adena. The realm returns a JSON data URI from `TokenURI`, does not publish `TokenMetadata`, and is a public package mainnet will not replace. Holders use the site. See [adena-collectables.md](adena-collectables.md).
 
 Factory for a new collection: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 

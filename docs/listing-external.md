@@ -1,6 +1,6 @@
 # List on Bazaar without using Launch
 
-For creators who already mint on their own Gno realm and want secondary listings on [Bazaar](https://bazaar.gnomi.fun).
+For creators who already mint on their own Gno realm and want secondary listings on [Nomaq](https://nomaq.xyz).
 
 Chain is mainnet `gnoland-1`. Quote asset is native `ugnot` (1 GNOT = 1,000,000 ugnot). Wallet is Adena. Adena cannot `addpkg`.
 
@@ -52,4 +52,6 @@ The protocol fee splits again: `GenesisShareBps` of it goes to `GenesisSink`, an
 
 ## Adena
 
-Chain id is `gnoland-1`. Add the collection pkg path as the collectable. The factory path and a GRC721 library path are not the collectable. Listed tokens sit in escrow at the realm address, so `TokensOf` omits them until `Cancel` or `Buy`. qeval names are in [adena-collectables.md](adena-collectables.md).
+Chain id is `gnoland-1`. Add the collection pkg path as the collectable. The factory path and a GRC721 library path are not the collectable. Listed tokens sit in escrow at the realm address, so `TokensOf` omits them until `Cancel` or `Buy`.
+
+Bazaar Gens does not render in Adena even when the token is unlisted. `TokenURI` is a JSON data document, `TokenMetadata` is not declared, and the public package cannot be replaced on mainnet (`package already exists`). Holders see and trade that collection on https://nomaq.xyz. qeval names: [adena-collectables.md](adena-collectables.md).

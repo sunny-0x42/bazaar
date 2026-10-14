@@ -4,7 +4,7 @@ Canonical source to copy: [`gno.land/r/bazaar/col`](../gno.land/r/bazaar/col/) (
 
 You can run your own mint page. Bazaar lists and buys on that same package. Minting on an unrelated realm does not list here.
 
-Chain is mainnet `gnoland-1`. Site: https://bazaar.gnomi.fun. Adena cannot `addpkg`.
+Chain is mainnet `gnoland-1`. Site: https://nomaq.xyz. Adena cannot `addpkg`.
 
 ## Retarget before addpkg
 
@@ -55,7 +55,9 @@ await window.adena.DoContract({
 
 `OriginSend` is empty or exactly one `ugnot` coin of the required amount. An extra denom panics.
 
-Cover and item images pass `validImage`: `http://` or `https://`, or `/samples/…`, at most 200 characters. The chain rejects `ipfs://`. For IPFS art, store `https://gateway.pinata.cloud/ipfs/<cid>`. Leave out `ipfs.io`, `dweb.link`, `w3s.link`, and `nftstorage.link`. `TokenURI` should put an absolute `https://` URL in `image`.
+Cover and item images pass `validImage`: `http://` or `https://`, or `/samples/…`, at most 200 characters. The chain rejects `ipfs://`. For IPFS art, store `https://gateway.pinata.cloud/ipfs/<cid>`. Leave out `ipfs.io`, `dweb.link`, `w3s.link`, and `nftstorage.link`.
+
+Adena puts `TokenURI` in `<img src>` and reads `TokenMetadata` for the card (`traitType`, camelCase). A `data:application/json` URI does not render. Live Bazaar Gens returns that data URI and has no public `TokenMetadata`. It was deployed as a public package, and mainnet `v1.5.1` rejects a replacement (`package already exists`). See [adena-collectables.md](adena-collectables.md). A new collection that should appear in Adena should return the https image from `TokenURI`, add `TokenMetadata`, and set `private = true` in `gnomod.toml` before the first `addpkg` if those reads may need a later correction.
 
 ## What Bazaar calls (list / buy)
 
@@ -81,7 +83,7 @@ Live Bazaar Gens and a retargeted template:
 | `Name()` / `Symbol()` | string (also `GrcName` / `GrcSymbol`) |
 | `BalanceOf("g1…")` | int64 |
 | `OwnerOf("1")` | `(address, error)`. Adena uses `owner, err := OwnerOf("1"); owner.String()`. |
-| `TokenURI("1")` | `data:application/json;charset=utf-8,…` |
+| `TokenURI("1")` | On live Bazaar Gens: `data:application/json;charset=utf-8,…`, which Adena does not render. Return the https image, plus `TokenMetadata`, for a wallet card. |
 | `TokensOf("g1…")` | csv of ids. Listed ids are omitted. |
 | `TokenOfOwnerByIndex("g1…", 0)` | one id string, on the retargeted template |
 | `ListOpen()` | up to 50 lines, columns below |

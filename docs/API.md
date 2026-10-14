@@ -4,7 +4,7 @@ Default product: one collection realm registered on **bazaarv5**. Hub `GetModule
 
 Live factory: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 
-Site: https://bazaar.gnomi.fun
+Site: https://nomaq.xyz
 
 Collection reads: `ListOpen`, `ItemLine`, `Name`, `Symbol`, `OwnerOf("1")` as `(address, error)`, `TokenURI("1")`, `TokensOf`. Writes: `List`, `Buy`, `Cancel`, `Transfer`, `PublicMint`, `Mint`.
 

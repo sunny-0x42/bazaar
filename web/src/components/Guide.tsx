@@ -61,7 +61,7 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
             and pick a launchpad, or go to <span className="mono">#/m/slug</span>.
           </li>
           <li>Connect Adena. Pay the mint price in GNOT (or free if the drop is 0). Primary mint is 0 bps — GNOT goes to the creator.</li>
-          <li>Your NFT lives on that collection realm. Metadata is ERC-721 JSON (<span className="mono">TokenURI</span>).</li>
+          <li>Your NFT lives on that collection realm. Nomaq reads the image from the item. Adena does not render Bazaar Gens — see Adena collectables below.</li>
         </ol>
       </article>
 
@@ -151,13 +151,18 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
       <article className="guide-block">
         <h2>Adena collectables</h2>
         <p>
-          Each collection is one realm. In Adena, Manage Collectables, paste the realm path (copy chip on the
-          collection page). Wallet qeval: <span className="mono">Name</span>, <span className="mono">BalanceOf</span>,{" "}
-          <span className="mono">TokensOf</span>, <span className="mono">TokenURI</span>. Spec for Adena:{" "}
+          Bazaar Gens shows on this site. It does not show in Adena. <span className="mono">TokenURI</span> returns a
+          JSON document, and Adena uses that whole string as the image address. <span className="mono">TokenMetadata</span>{" "}
+          is not published on this collection. The realm is a public package, so mainnet cannot replace it (
+          <span className="mono">package already exists</span>). View and trade the NFT here.
+        </p>
+        <p>
+          A listed NFT is held by the collection realm until you cancel or it sells, so it also leaves the wallet
+          balance. That is separate from the Bazaar Gens metadata mismatch. Written note:{" "}
           <a href="https://github.com/sunny-0x42/bazaar/blob/master/docs/adena-collectables.md" target="_blank" rel="noreferrer">
             docs/adena-collectables.md
           </a>
-          . Listed items sit in escrow, so they may not show in the wallet until you cancel.
+          .
         </p>
       </article>
     </section>

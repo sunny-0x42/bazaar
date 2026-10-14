@@ -2,7 +2,7 @@
 
 ## Production (mainnet)
 
-UI: https://bazaar.gnomi.fun on Netlify. Chain `gnoland-1`. New collections register on factory **bazaarv5**.
+UI: https://nomaq.xyz. Chain `gnoland-1`. New collections register on factory **bazaarv5**.
 
 `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`
 

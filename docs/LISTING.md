@@ -2,7 +2,7 @@
 
 Gno cannot `TransferFrom` an unknown GRC721 at runtime. Listing is not “paste a contract address”.
 
-Chain is mainnet `gnoland-1`. Site: https://bazaar.gnomi.fun. New collections register on `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`.
+Chain is mainnet `gnoland-1`. Site: https://nomaq.xyz. New collections register on `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`.
 
 ## Path A — Launch a Bazaar collection
 
@@ -15,6 +15,8 @@ Chain is mainnet `gnoland-1`. Site: https://bazaar.gnomi.fun. New collections re
 ## Path B — List an item you already own here
 
 If `OwnerOf` is your account and the item is not listed: `List`. UI: Sell.
+
+Bazaar Gens shows on Nomaq and does not render in Adena. `TokenURI` is a JSON data document, `TokenMetadata` is missing, and the public package cannot be replaced. See [adena-collectables.md](adena-collectables.md).
 
 ## Path C — NFT from another realm
 

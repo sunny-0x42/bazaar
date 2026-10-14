@@ -14,7 +14,7 @@ Factory: `gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/bazaarv5`. 
 
 ## UI
 
-Site: https://bazaar.gnomi.fun
+Site: https://nomaq.xyz
 
 - **Explore** shows collection cards with floor (lowest listed GNOT) or mint price. A live drop links to `#/m/{slug}`.
 - **Launch** is the collection wizard: public sale, or allowlist then public. Royalty 0–10% is set at launch. Secondary protocol is 2% before holder discount.

@@ -8,6 +8,6 @@ Live behavior: `Reserve` then `Init` with an empty send, `CancelReserve` returns
 
 These stay on chain and are not the registry for a new collection: `bazaarv1`, `bazaarv2`, `bazaarv3`, `bazaarv4`, `…/factory`, and Pearl nftv7 / factoryv3.
 
-The public UI is https://bazaar.gnomi.fun. It reads bazaarv5 and still merges rows from bazaarv2, bazaarv1, and `factory`. There is no collection Pool tab.
+The public UI is https://nomaq.xyz. It reads bazaarv5 and still merges rows from bazaarv2, bazaarv1, and `factory`. There is no collection Pool tab.
 
 Copy `col` and retarget it before `addpkg`. See [listing-external.md](listing-external.md). `tools/mainnet-launch-col.ps1` still points at an older factory. Human yes before any mainnet `addpkg`.

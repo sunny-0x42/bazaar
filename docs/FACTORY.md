@@ -20,6 +20,8 @@ Source package in this repo is `gno.land/r/bazaar/factory`. The mainnet deploy n
 
 The live template imports genesis `gno.land/p/nt/grc721/v0`. `OwnerOf(tid string) (address, error)`. `List` escrows the token to the collection realm. See [adena-collectables.md](adena-collectables.md).
 
+Live Bazaar Gens on mainnet uses that JSON document and does not publish `TokenMetadata`. Adena does not render it, and the public package cannot be replaced. Holder note: [adena-collectables.md](adena-collectables.md).
+
 ## Realms
 
 | Path | Role |
