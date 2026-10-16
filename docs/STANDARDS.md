@@ -39,7 +39,7 @@ GRC20 tokens are not listed on Bazaar Explore. Frozen `r/bazaar/market` is not t
 
 The public UI reads `bazaarv5` `ListCollections()`, and it still merges rows from the older on-chain registries `bazaarv2`, `bazaarv1`, and `factory`. A new collection registers on `bazaarv5`.
 
-These slugs stay off the public grid: `test`, `stdcol`, `adcol`, `col3333`, `shown`.
+These slugs stay off the public grid: `test`, `stdcol`, `adcol`, `col3333`, `shown`, `seafish`. `seafish` is GnoFish Sea. The footer link to https://gnofish.xyz is the GnoFish site, not that collection.
 
 Collection pages are Items, Chart, and Activity.
 

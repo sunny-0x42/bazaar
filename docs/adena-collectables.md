@@ -13,7 +13,7 @@ Adena indexes `NewToken` / `Transfer` whose `pkg_path` is genesis `gno.land/p/nt
 
 The committed `gno.land/r/bazaar/col` sample still imports `gno.land/p/bazaar/grc721/v0` and exports `OwnerOf(id int) address`. That pair leaves the collection card without a token grid. The live Bazaar Gens realm uses the string form.
 
-The public grid hides slugs `test`, `stdcol`, `adcol`, `col3333`, and `shown`.
+The public grid hides slugs `test`, `stdcol`, `adcol`, `col3333`, `shown`, and `seafish`.
 
 ## Holders — Bazaar Gens does not render in Adena
 

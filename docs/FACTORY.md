@@ -52,7 +52,7 @@ Live Bazaar Gens on mainnet uses that JSON document and does not publish `TokenM
 slug|name|cover|pkg|mintPrice|maxSupply|minted|creator|addr|royaltyBps
 ```
 
-The public UI reads `bazaarv5` and still merges `bazaarv2`, `bazaarv1`, and `factory`. Hidden slugs: `test`, `stdcol`, `adcol`, `col3333`, `shown`.
+The public UI reads `bazaarv5` and still merges `bazaarv2`, `bazaarv1`, and `factory`. Hidden slugs: `test`, `stdcol`, `adcol`, `col3333`, `shown`, `seafish`.
 
 Adena’s collectable is the **collection pkg**, not the factory.
 
