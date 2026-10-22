@@ -3,13 +3,19 @@ import {
   activityKindLabel,
   filterItems,
   filterListedItems,
+  hasListedAsk,
   itemMatchesTraits,
   traitGroups,
   filterListings,
   gnotFromCoins,
   mintHash,
+  itemHash,
   parseHash,
+  sharePath,
   tabHash,
+  parseEditions,
+  parseOpenListings,
+  parseEditionBook,
   profileHash,
   parseCoinsUgnot,
   artSrc,
@@ -25,8 +31,10 @@ import {
   isMintName,
   isNameNotDeclared,
   isOwnListing,
+  itemRowKey,
   isPreviewItem,
   isRealmUnavailable,
+  pkgMetaStatus,
   isSamplePath,
   parseActivityLines,
   parseCollectionLines,
@@ -34,9 +42,15 @@ import {
   parseFeaturedLines,
   collectionBookPath,
   collectionRealmPath,
+  isLaunchpadMint,
+  factoryPkgFor,
   DEFAULT_FACTORY,
   DEFAULT_NFT,
   FACTORY_PKG,
+  FACTORY_PKG_MAINNET,
+  FACTORY_PKG_MAINNET_V1,
+  FACTORY_PKG_MAINNET_V5,
+  FACTORY_PKG_PEARL,
   parseIds,
   parseItems,
   parseListings,
@@ -48,6 +62,7 @@ import {
   parseSocials,
   parseDropSale,
   parseTokenURI,
+  tokenURIExpr,
   sameAddr,
   socialHref,
   sweepQuote,
@@ -55,6 +70,12 @@ import {
   protocolFeeLabel,
   protocolFeeUgnot,
   shortAddr,
+  isG1Addr,
+  itemSendKey,
+  traitShares,
+  formatTraitPct,
+  rarityClass,
+  traitRarityKind,
   sortItems,
   sortListings,
   symbolHue,
@@ -204,7 +225,7 @@ describe("jsonToSlotBlob", () => {
         },
       ]),
     );
-    expect(blob).toBe("Dusk Fox|https://ipfs.io/ipfs/bafybeiabc|Rare|");
+    expect(blob).toBe("Dusk Fox|https://gateway.pinata.cloud/ipfs/bafybeiabc|Rare|");
   });
 
   it("reads launch pack collection fields", async () => {
@@ -218,12 +239,58 @@ describe("jsonToSlotBlob", () => {
         mintPrice: "1",
         royaltyPct: 5,
         hideUntilReveal: true,
+        prereveal: "ipfs://bafybeiabc",
         items: [{ name: "Fox #1", image: "/samples/foxes-01.png" }],
       }),
     );
     expect(meta.slug).toBe("hfoxes");
     expect(meta.maxSupply).toBe("20");
     expect(meta.hideUntilReveal).toBe(true);
+    expect(meta.prereveal).toBe("ipfs://bafybeiabc");
+  });
+
+  it("reads the pack whitelist quantity and UTC open time", async () => {
+    const { applyLaunchPack } = await import("./dropjson");
+    const meta = applyLaunchPack(
+      JSON.stringify({
+        name: "Bazaar Gens",
+        whitelist: { cap: 333, opensAt: 1_790_553_600, opensUtc: "2026-09-28T00:00:00Z" },
+      }),
+    );
+    expect(meta.wlQty).toBe("333");
+    expect(meta.wlStart).toBe("2026-09-28 00:00");
+    expect(meta.wlPrice).toBeUndefined();
+    expect(meta.publicStart).toBeUndefined();
+  });
+
+  it("reads a sample whitelist price and public start", async () => {
+    const { applyLaunchPack } = await import("./dropjson");
+    const meta = applyLaunchPack(
+      JSON.stringify({
+        whitelist: {
+          price: "0.5",
+          cap: 8,
+          opensUtc: "2026-09-28T00:00:00Z",
+          publicStartUtc: "2026-09-28T12:00:00Z",
+        },
+      }),
+    );
+    expect(meta.wlPrice).toBe("0.5");
+    expect(meta.wlQty).toBe("8");
+    expect(meta.wlStart).toBe("2026-09-28 00:00");
+    expect(meta.publicStart).toBe("2026-09-28 12:00");
+  });
+
+  it("reads the Harbor Foxes sample whitelist stage", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { applyLaunchPack } = await import("./dropjson");
+    const meta = applyLaunchPack(readFileSync("public/samples/launch-collection.json", "utf8"));
+    expect(meta.name).toBe("Harbor Foxes");
+    expect(meta.mintPrice).toBe("1");
+    expect(meta.wlPrice).toBe("0.5");
+    expect(meta.wlQty).toBe("8");
+    expect(meta.wlStart).toBe("2026-09-28 00:00");
+    expect(meta.publicStart).toBe("2026-09-28 12:00");
   });
 
   it("counts JSON items and rejects over 10000", async () => {
@@ -244,6 +311,18 @@ describe("liveTradeRows", () => {
     ]);
     expect(rows.map((r) => r.kind)).toEqual(["list", "buy"]);
   });
+
+  it("keeps trades from this factory and drops older collections", async () => {
+    const { scopeLiveTape } = await import("./chain");
+    const rows = [
+      { kind: "list", id: "1", slug: "shown", actor: "g1a", price: 1, name: "Old" },
+      { kind: "buy", id: "2", slug: "bazaargens", actor: "g1b", price: 2, name: "Gens" },
+      { kind: "mint", id: "3", slug: "bazaargens", actor: "g1b", price: 0, name: "Skip" },
+    ];
+    expect(scopeLiveTape(rows, ["bazaargens"]).map((row) => row.name)).toEqual(["Gens"]);
+    expect(scopeLiveTape(rows, null).map((row) => row.slug)).toEqual(["shown", "bazaargens"]);
+    expect(scopeLiveTape(rows, [])).toEqual([]);
+  });
 });
 
 describe("parseDropSale", () => {
@@ -254,7 +333,53 @@ describe("parseDropSale", () => {
       wlSupply: 20,
       phase: "whitelist",
       mintPrice: 2_000_000,
+      wlStart: 0,
+      wlEnd: 0,
+      publicStart: 0,
+      publicEnd: 0,
     });
+    expect(parseDropSale(`("0|0|0|closed|0" string)`).phase).toBe("closed");
+  });
+});
+
+describe("parseUtcMinute", () => {
+  it("reads a UTC minute and rejects a bad calendar day", async () => {
+    const { parseUtcMinute, parseMintSchedule, parsePhaseMintCap } = await import("./chain");
+    expect(parseUtcMinute("2026-09-28 00:00")).toBe(1_790_553_600);
+    expect(parseUtcMinute("2026-09-28T00:00")).toBe(1_790_553_600);
+    expect(parseUtcMinute("")).toBeNull();
+    expect(parseUtcMinute("2026-13-01 00:00")).toBeNull();
+    const { joinUtcMinute, splitUtcMinute } = await import("./chain");
+    expect(joinUtcMinute("2026-09-30", "")).toBe("2026-09-30 00:00");
+    expect(joinUtcMinute("2026-09-30", "18:00")).toBe("2026-09-30 18:00");
+    expect(joinUtcMinute("2026-09-30", "18:05:09")).toBe("2026-09-30 18:05");
+    expect(joinUtcMinute("", "18:00")).toBe("");
+    expect(parseUtcMinute(joinUtcMinute("2026-09-30", "18:00"))! > parseUtcMinute("2026-09-30 17:58")!).toBe(true);
+    expect(parseUtcMinute("2026-09-30 00:00")! > parseUtcMinute("2026-09-29 23:00")!).toBe(true);
+    expect(splitUtcMinute("2026-09-30 18:00")).toEqual({ date: "2026-09-30", time: "18:00" });
+    expect(parsePhaseMintCap(`("1|2" string)`)).toEqual({ wl: 1, pub: 2 });
+    expect(parsePhaseMintCap("")).toEqual({ wl: 0, pub: 0 });
+    expect(parseMintSchedule(`("1790553600|1790557200" string)`)).toEqual({
+      wlStart: 1_790_553_600,
+      wlEnd: 0,
+      publicStart: 1_790_557_200,
+      publicEnd: 0,
+    });
+    expect(parseMintSchedule(`("1790553600|1790555400|1790557200|1790559000" string)`)).toEqual({
+      wlStart: 1_790_553_600,
+      wlEnd: 1_790_555_400,
+      publicStart: 1_790_557_200,
+      publicEnd: 1_790_559_000,
+    });
+  });
+});
+
+describe("reserveSendUgnot", () => {
+  it("keeps LaunchFee when ReserveDue is missing and uses 0 for the admin wallet", async () => {
+    const { reserveSendUgnot } = await import("./chain");
+    expect(reserveSendUgnot(1_000_000_000, null)).toBe(1_000_000_000);
+    expect(reserveSendUgnot(1_000_000_000, 0)).toBe(0);
+    expect(reserveSendUgnot(1_000_000_000, -1)).toBe(1_000_000_000);
   });
 });
 
@@ -505,6 +630,21 @@ describe("parseFactoryCollectionLines", () => {
     expect(parsed[0].royaltyBps).toBeUndefined();
   });
 
+  it("drops mainnet probe slugs so Explore never qevals them", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("test|Test|x|gno.land/r/g1x/bazaar/c/test|0|1|1|g1a\nshown|Shown|x|gno.land/r/g1x/bazaar/c/shown|0|3333|1|g1a\ncol3333|Col3333|x|gno.land/r/g1x/bazaar/c/col3333|0|3333|1|g1a\nopenx|Open|x|gno.land/r/g1x/bazaar/c/openx|0|10|1|g1a" string)`,
+    );
+    expect(parsed.map((row) => row.slug)).toEqual(["openx"]);
+  });
+
+  it("includeHidden keeps probe slugs for wallet holdings", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("shown|Shown|x|gno.land/r/g1x/bazaar/c/shown|0|3333|1|g1a\nopenx|Open|x|gno.land/r/g1x/bazaar/c/openx|0|10|1|g1a" string)`,
+      { includeHidden: true },
+    );
+    expect(parsed.map((row) => row.slug)).toEqual(["shown", "openx"]);
+  });
+
   it("reads optional addr and royaltyBps when 10 fields are present", () => {
     const parsed = parseFactoryCollectionLines(
       `("demo|Demo|/samples/clay-01.png|gno.land/r/bazaar/c/demo|1000000|100|3|g1abc|g1coladdr00000000000000000000000000|500" string)`,
@@ -548,6 +688,16 @@ describe("parseFactoryCollectionLines", () => {
     });
   });
 
+  it("keeps every row when qeval embeds real newlines", () => {
+    const parsed = parseFactoryCollectionLines(
+      `("tffoxes|TFF Foxes|https://famousfoxes.com/tff/5227.png|gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/tffoxes|0|8|8|g1abc|g1colaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|500
+ffoxes|Famous Foxes|https://famousfoxes.com/hd/7216.png|gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/ffoxes|0|8|8|g1abc|g1colbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|500
+madlads|Mad Lads|https://madlads.s3.us-west-2.amazonaws.com/images/3212.png|gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/madlads|0|8|8|g1abc|g1colcccccccccccccccccccccccccccccc|500" string)`,
+    );
+    expect(parsed.map((c) => c.slug)).toEqual(["tffoxes", "ffoxes", "madlads"]);
+    expect(parsed[0].cover).toBe("https://famousfoxes.com/tff/5227.png");
+  });
+
   it("skips nftv6 DropLine rows (count is not a pkg path)", () => {
     expect(
       parseFactoryCollectionLines(
@@ -560,8 +710,15 @@ describe("parseFactoryCollectionLines", () => {
     expect(DEFAULT_FACTORY).toBe("gno.land/r/bazaar/factory");
     expect(DEFAULT_FACTORY).toBe(FACTORY_PKG);
     expect(DEFAULT_FACTORY).not.toBe(DEFAULT_NFT);
+    expect(factoryPkgFor("local")).toBe(FACTORY_PKG);
+    expect(factoryPkgFor("pearl")).toBe(FACTORY_PKG_PEARL);
+    expect(factoryPkgFor("mainnet")).toBe(FACTORY_PKG_MAINNET_V5);
+    expect(factoryPkgFor("onyx")).toBe(FACTORY_PKG_MAINNET_V5);
     expect(collectionRealmPath("hfoxes", "local")).toBe("gno.land/r/bazaar/c/hfoxes");
     expect(collectionRealmPath("hfoxes", "pearl")).toBe(
+      "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/hfoxes",
+    );
+    expect(collectionRealmPath("hfoxes", "mainnet")).toBe(
       "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/hfoxes",
     );
     expect(
@@ -574,6 +731,18 @@ describe("parseFactoryCollectionLines", () => {
     expect(collectionBookPath("missing", [{ slug: "demo", pkg: "gno.land/r/bazaar/c/demo" }], DEFAULT_NFT)).toBe(
       DEFAULT_NFT,
     );
+    expect(
+      isLaunchpadMint({
+        slug: "bazaargens",
+        pkg: "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/bazaargens",
+      }),
+    ).toBe(true);
+    expect(
+      isLaunchpadMint({
+        slug: "gnofly",
+        pkg: "gno.land/r/g1t2kg2vtr3fukg43eujkn6x53gfdyakhngt4sfd/gnofly/nfts/market/bazaar/v1/gnofly",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -633,6 +802,8 @@ describe("activityKindLabel", () => {
     expect(activityKindLabel("cancel")).toBe("Cancelled");
     expect(activityKindLabel("drop")).toBe("Drop");
     expect(activityKindLabel("publicmint")).toBe("Public mint");
+    expect(activityKindLabel("transfer")).toBe("Transfer");
+    expect(activityKindLabel("init")).toBe("Created");
     expect(activityKindLabel("LIST")).toBe("Listed");
     expect(activityKindLabel("offer")).toBe("Offer");
     expect(activityKindLabel("accept")).toBe("Offer taken");
@@ -692,6 +863,48 @@ describe("shortAddr", () => {
   });
 });
 
+describe("isG1Addr", () => {
+  it("accepts 40-char g1 bech32", () => {
+    expect(isG1Addr("g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt")).toBe(true);
+    expect(isG1Addr("g1mv0052e7r6s09f5t9xsqf00nj3tqsgt9dg52jr")).toBe(true);
+    expect(isG1Addr(" g1mv0052e7r6s09f5t9xsqf00nj3tqsgt9dg52jr ")).toBe(true);
+    expect(isG1Addr("g1short")).toBe(false);
+    expect(isG1Addr("G1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt")).toBe(false);
+  });
+});
+
+describe("itemSendKey", () => {
+  it("joins collection slug and id", () => {
+    expect(itemSendKey(items[0])).toBe("stones:1");
+    expect(itemRowKey(items[0])).toBe("stones:1");
+    expect(itemRowKey(items[1])).toBe("lamps:2");
+  });
+});
+
+describe("traitShares", () => {
+  const set: Item[] = [
+    { ...items[0], id: "1", traits: "Background:Dusk;Fur:Ember", rarity: "Rare" },
+    { ...items[0], id: "2", traits: "Background:Dusk;Fur:Gold", rarity: "Common" },
+    { ...items[0], id: "3", traits: "Background:Noon;Fur:Ember", rarity: "Common" },
+    { ...items[0], id: "4", traits: "Background:Noon;Fur:Gold", rarity: "Common" },
+  ];
+
+  it("ranks rare values first with true percents", () => {
+    const shares = traitShares(set[0], set);
+    const fur = shares.find((s) => s.type === "Fur");
+    expect(fur).toMatchObject({ value: "Ember", count: 2, total: 4, pct: 50 });
+    expect(formatTraitPct(50)).toBe("50%");
+    expect(formatTraitPct(0.4)).toBe("<1%");
+    expect(formatTraitPct(2.5)).toBe("2.5%");
+    expect(traitRarityKind(2)).toBe("legendary");
+    expect(traitRarityKind(8)).toBe("rare");
+    expect(traitRarityKind(40)).toBe("");
+    expect(rarityClass("Common")).toBe("rarity rarity-common");
+    expect(rarityClass(" Mythic ")).toBe("rarity rarity-mythic");
+    expect(rarityClass("Unrevealed")).toBe("rarity");
+  });
+});
+
 describe("parseIds", () => {
   it("splits comma ids from qeval", () => {
     expect(parseIds(`("1,2,3" string)`)).toEqual(["1", "2", "3"]);
@@ -729,12 +942,15 @@ describe("isSamplePath / isArtSrc", () => {
 });
 
 describe("ipfs", () => {
-  it("maps ipfs:// CID to the ipfs.io gateway", () => {
+  it("maps ipfs:// CID to the Pinata gateway and rewrites retired gateways", () => {
     expect(isIpfsUri("ipfs://bafybeiabc")).toBe(true);
     expect(isIpfsUri("ipfs://bafybeiabc/fox.png")).toBe(true);
     expect(isIpfsUri("https://ipfs.io/ipfs/bafybeiabc")).toBe(false);
-    expect(ipfsToHttp("ipfs://bafybeiabc/fox.png")).toBe("https://ipfs.io/ipfs/bafybeiabc/fox.png");
-    expect(artSrc("ipfs://bafybeiabc")).toBe("https://ipfs.io/ipfs/bafybeiabc");
+    expect(ipfsToHttp("ipfs://bafybeiabc/fox.png")).toBe("https://gateway.pinata.cloud/ipfs/bafybeiabc/fox.png");
+    expect(ipfsToHttp("https://ipfs.io/ipfs/bafybeiabc")).toBe("https://gateway.pinata.cloud/ipfs/bafybeiabc");
+    expect(ipfsToHttp("https://example.com/a.png")).toBe("https://example.com/a.png");
+    expect(artSrc("ipfs://bafybeiabc")).toBe("https://gateway.pinata.cloud/ipfs/bafybeiabc");
+    expect(artSrc("https://ipfs.io/ipfs/bafybeiabc")).toBe("https://gateway.pinata.cloud/ipfs/bafybeiabc");
   });
 });
 
@@ -1200,7 +1416,12 @@ describe("filterListedItems", () => {
     expect(itemMatchesTraits(items[0], { Fur: ["Ember"] })).toBe(true);
     expect(filterListedItems(items, { traits: { Fur: ["Ember"] } }).map((r) => r.id)).toEqual(["1"]);
     expect(traitGroups(items).some((g) => g.type === "Rarity")).toBe(true);
+    expect(
+      traitGroups([{ ...items[0], traits: "Edition:0001;Fur:Ember" }]).map((g) => g.type),
+    ).toEqual(["Rarity", "Fur"]);
     expect(filterListedItems(items, { listedOnly: true }).every((r) => r.listed)).toBe(true);
+    expect(hasListedAsk(items)).toBe(true);
+    expect(hasListedAsk([{ listed: false, price: 0 }, { listed: true, price: 0 }])).toBe(false);
   });
 });
 
@@ -1226,6 +1447,7 @@ describe("parseFeaturedLines", () => {
 describe("parseHash", () => {
   it("reads collection, item, and page URLs", () => {
     expect(parseHash("#/c/stones")).toEqual({ tab: "explore", slug: "stones", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/c/madlads/5")).toEqual({ tab: "explore", slug: "madlads", itemId: "5", profile: "", mintSlug: "" });
     expect(parseHash("#/i/12")).toEqual({ tab: "explore", slug: "", itemId: "12", profile: "", mintSlug: "" });
     expect(parseHash("#/m/stones")).toEqual({ tab: "explore", slug: "", itemId: "", profile: "", mintSlug: "stones" });
     expect(parseHash("#/launch")).toEqual({ tab: "create", slug: "", itemId: "", profile: "", mintSlug: "" });
@@ -1242,12 +1464,56 @@ describe("parseHash", () => {
     expect(parseHash("#/settings")).toEqual({ tab: "settings", slug: "", itemId: "", profile: "", mintSlug: "" });
     expect(parseHash("#/admin")).toEqual({ tab: "admin", slug: "", itemId: "", profile: "", mintSlug: "" });
     expect(parseHash("#/guide")).toEqual({ tab: "guide", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/genesis")).toEqual({ tab: "genesis", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/whitelist")).toEqual({ tab: "genesis", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(parseHash("#/rewards")).toEqual({ tab: "rewards", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(tabHash("rewards")).toBe("#/rewards");
+    expect(parseHash("#/editions")).toEqual({ tab: "editions", slug: "", itemId: "", profile: "", mintSlug: "" });
+    expect(tabHash("editions")).toBe("#/editions");
+    expect(
+      parseEditions('("print|Trial Print|https://nomaq.xyz/bazaar-mark.svg|20|4|1000000" string)'),
+    ).toEqual([
+      {
+        id: "print",
+        name: "Trial Print",
+        image: "https://nomaq.xyz/bazaar-mark.svg",
+        max: 20,
+        minted: 4,
+        mintPrice: 1_000_000,
+      },
+    ]);
+    expect(parseOpenListings('("g1abc|print|2|2000000" string)')).toEqual([]);
+    expect(
+      parseOpenListings(
+        '("g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt|print|2|2000000" string)',
+      ),
+    ).toEqual([
+      {
+        seller: "g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt",
+        id: "print",
+        amount: 2,
+        unit: 2_000_000,
+      },
+    ]);
+    expect(
+      parseEditionBook(
+        '("edcol|Prints|https://nomaq.xyz/bazaar-mark.svg|gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/edcol|4|g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt|g1jpkyxdukxlcs8h4pagmguq78rp0m76dlwhn5ul|500" string)',
+      ),
+    ).toEqual({ creator: "g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt", royaltyBps: 500 });
     expect(tabHash("guide")).toBe("#/guide");
     expect(parseHash("#/explore")).toEqual({ tab: "explore", slug: "", itemId: "", profile: "", mintSlug: "" });
     expect(parseHash("")).toEqual({ tab: "explore", slug: "", itemId: "", profile: "", mintSlug: "" });
     expect(tabHash("admin")).toBe("#/admin");
     expect(profileHash("g1abc")).toBe("#/u/g1abc");
     expect(mintHash("stones")).toBe("#/m/stones");
+    expect(itemHash("5", "madlads")).toBe("#/c/madlads/5");
+    expect(itemHash("12")).toBe("#/i/12");
+    expect(sharePath("#/c/stones")).toBe("/c/stones");
+    expect(sharePath("#/c/madlads/5")).toBe("/c/madlads/5");
+    expect(sharePath("#/m/stones")).toBe("/m/stones");
+    expect(sharePath("#/i/12")).toBe("/i/12");
+    expect(sharePath("#/profile")).toBe("/");
+    expect(sharePath("#/explore")).toBe("/");
   });
 });
 
@@ -1266,11 +1532,26 @@ describe("isRealmUnavailable", () => {
   });
 });
 
+describe("pkgMetaStatus", () => {
+  it("reads live and inert package metadata", () => {
+    expect(pkgMetaStatus('{"status":"live"}')).toBe("live");
+    expect(pkgMetaStatus('{"status":"inert","pending":true}')).toBe("inert");
+    expect(pkgMetaStatus("package not found")).toBe("");
+  });
+});
+
 describe("isNameNotDeclared", () => {
   it("detects missing realm funcs", () => {
     expect(isNameNotDeclared("ERROR: /std.InternalError: recovered: name Offer not declared")).toBe(true);
     expect(isNameNotDeclared("name ListOffers not declared:")).toBe(true);
     expect(isNameNotDeclared("nft: self buy")).toBe(false);
+  });
+});
+
+describe("tokenURIExpr", () => {
+  it("quotes string TokenIDs for Adena-shaped qeval", () => {
+    expect(tokenURIExpr(1)).toBe(`TokenURI("1")`);
+    expect(tokenURIExpr("12")).toBe(`TokenURI("12")`);
   });
 });
 

@@ -42,6 +42,7 @@ Get-ChildItem $srcDir -File | Where-Object { $_.Name -eq "gnomod.toml" -or ($_.E
   $raw = $raw.Replace("package col", "package $Slug")
   $raw = $raw.Replace('"gno.land/r/bazaar/factory"', "factory `"$factoryPath`"")
   $raw = $raw.Replace("gno.land/p/bazaar/grc721", $grc721Root)
+  $raw = $raw.Replace("gno.land/p/nt/grc721", $grc721Root)
   $raw = $raw.Replace("gno.land/p/bazaar/fee/v1", $feePath)
   $raw = $raw.Replace('module = "gno.land/r/bazaar/col"', "module = `"$colPath`"")
   $name = $_.Name

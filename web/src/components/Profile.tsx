@@ -1,9 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   accountExplorer,
   activityKindLabel,
+  isG1Addr,
+  itemCollectionSlug,
   itemRowKey,
+  itemSendKey,
+  protocolFeeUgnot,
   sameAddr,
+  ugnotFromGnot,
   shortAddr,
   type Activity,
   type ChainCollection,
@@ -11,10 +16,15 @@ import {
   type Network,
 } from "../lib/chain";
 import { isArtSrc } from "../lib/chain";
+import { listButtonLabel } from "../lib/bulklist";
 import { emptyProfile, type UserProfile } from "../lib/userProfile";
+import { CopyLine } from "./CopyLine";
 import { EmptyState } from "./EmptyState";
+import { SkeletonGrid } from "./SkeletonGrid";
 import { ItemArt } from "./ItemArt";
 import { ListingCard } from "./ListingCard";
+import { ListingDrawer } from "./ListingDrawer";
+import { Select } from "./Select";
 import { TokenMark } from "./TokenMark";
 import { PriceMark } from "./PriceMark";
 import type { Tab } from "./types";
@@ -27,6 +37,9 @@ type Props = {
   connected: boolean;
   wallet?: string;
   items: Item[];
+  marketItems?: Item[];
+  collectionPeers?: Record<string, Item[]>;
+  onNeedPeers?: (slug: string) => void;
   created: ChainCollection[];
   activity: Activity[];
   blocked: boolean;
@@ -35,13 +48,15 @@ type Props = {
   onConnect: () => void;
   onCancel: (item: Item) => void;
   onOpenTab: (tab: Tab) => void;
-  onOpenItem: (item: Item) => void;
+  onOpenItem?: (item: Item) => void;
   onOpenCollection: (slug: string) => void;
   onOpenMint?: (slug: string) => void;
   onBuy: (item: Item) => void;
   onSell?: (item: Item) => void;
-  onTransfer?: (id: string, to: string) => void;
+  onListWallet?: (rows: { item: Item; priceUgnot: number }[]) => void;
+  onTransfer?: (item: Item, to: string) => void;
   onReveal?: (id: string) => void;
+  onSyncNft?: (item: Item) => void;
   userProfile?: UserProfile;
   onSaveProfile?: (p: UserProfile) => void;
 };
@@ -52,6 +67,9 @@ export function Profile({
   connected,
   wallet,
   items,
+  marketItems = [],
+  collectionPeers = {},
+  onNeedPeers,
   created,
   activity,
   blocked,
@@ -65,19 +83,73 @@ export function Profile({
   onOpenMint,
   onBuy,
   onSell,
+  onListWallet,
   onTransfer,
   onReveal,
+  onSyncNft,
   userProfile,
   onSaveProfile,
 }: Props) {
 
   const [pane, setPane] = useState<Pane>("collected");
-  const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<UserProfile>(emptyProfile());
+  const [sendKey, setSendKey] = useState("");
+  const [sendTo, setSendTo] = useState("");
+  const [sending, setSending] = useState(false);
+  const [openItem, setOpenItem] = useState<Item | null>(null);
+  const [walletPrice, setWalletPrice] = useState("1");
+  const [picked, setPicked] = useState<Record<string, boolean> | null>(null);
   const mine = sameAddr(address, wallet);
   const listed = items.filter((row) => row.listed && row.price > 0);
   const collected = items;
+  const sendable = useMemo(
+    () => items.filter((row) => !!row.id && !row.listed && (!wallet || sameAddr(row.owner, wallet))),
+    [items, wallet],
+  );
+  const sendItem = sendable.find((row) => itemSendKey(row) === sendKey) || sendable[0] || null;
+  const canSend = !!onTransfer && !!sendItem && isG1Addr(sendTo) && !sameAddr(sendTo, wallet);
+  const walletOn = useMemo(() => {
+    const next: Record<string, boolean> = {};
+    for (const row of sendable) {
+      const key = itemRowKey(row);
+      next[key] = picked ? !!picked[key] : true;
+    }
+    return next;
+  }, [picked, sendable]);
+  const walletChosen = sendable.filter((row) => walletOn[itemRowKey(row)]);
+  const walletUgnot = ugnotFromGnot(walletPrice);
+  const canListWallet = !!onListWallet && walletChosen.length > 0 && walletUgnot > 0;
+  const walletReceive = Math.max(0, walletUgnot * walletChosen.length - walletChosen.length * protocolFeeUgnot(walletUgnot));
+
+  function selectWallet(on: boolean) {
+    const next: Record<string, boolean> = {};
+    for (const row of sendable) next[itemRowKey(row)] = on;
+    setPicked(next);
+  }
+
+  function toggleWallet(item: Item) {
+    const key = itemRowKey(item);
+    setPicked({ ...walletOn, [key]: !walletOn[key] });
+  }
+
+  useEffect(() => {
+    if (!sendable.some((row) => itemSendKey(row) === sendKey)) {
+      setSendKey(sendable[0] ? itemSendKey(sendable[0]) : "");
+    }
+  }, [sendable, sendKey]);
+
+  useEffect(() => {
+    if (pane !== "collected") setSending(false);
+  }, [pane]);
+
+  useEffect(() => {
+    setOpenItem((cur) => {
+      if (!cur?.id) return cur;
+      const key = itemSendKey(cur);
+      return items.find((row) => itemSendKey(row) === key) || null;
+    });
+  }, [items]);
   const listedValue = listed.reduce((n, row) => n + row.price, 0);
   const collectionsHeld = new Set(items.map((it) => it.collection).filter(Boolean)).size;
   const explorer = accountExplorer(address, network);
@@ -87,16 +159,6 @@ export function Profile({
     if (pane === "listed") return listed;
     return collected;
   }, [pane, listed, collected]);
-
-  async function copyAddr() {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* ignore */
-    }
-  }
 
   if (!address) {
     return (
@@ -128,59 +190,65 @@ export function Profile({
         <div className="profile-ident">
           <div className="profile-avatar">
             {userProfile?.avatar && isArtSrc(userProfile.avatar) ? (
-              <ItemArt name={userProfile.name || address} image={userProfile.avatar} alt="" />
+              <ItemArt name={userProfile.name || address} image={userProfile.avatar} alt="" priority />
             ) : (
-              <TokenMark symbol={address} size={88} />
+              <TokenMark symbol={address} size={72} />
             )}
           </div>
           <div className="profile-copy">
-            <h1>
-              {userProfile?.name || (mine ? "Your profile" : "Collector")}
-              {mine ? <span className="tag">You</span> : null}
-            </h1>
-            <p className="profile-addr mono" title={address}>
-              {shortAddr(address)}
-            </p>
-            <div className="profile-links">
-              <button className="btn" type="button" onClick={() => void copyAddr()}>
-                {copied ? "Copied" : "Copy address"}
-              </button>
-              {explorer ? (
-                <a className="btn" href={explorer} target="_blank" rel="noreferrer">
-                  gnoscan
-                </a>
-              ) : null}
-              {userProfile?.website ? (
-                <a className="btn" href={userProfile.website} target="_blank" rel="noreferrer">
-                  Website
-                </a>
-              ) : null}
-              {userProfile?.twitter ? (
-                <a className="btn" href={userProfile.twitter.startsWith("http") ? userProfile.twitter : `https://x.com/${userProfile.twitter.replace(/^@/, "")}`} target="_blank" rel="noreferrer">
-                  X
-                </a>
-              ) : null}
-              {userProfile?.discord ? (
-                <a className="btn" href={userProfile.discord} target="_blank" rel="noreferrer">
-                  Discord
-                </a>
-              ) : null}
+            <div className="profile-hero-top">
+              <div className="profile-hero-id">
+                <h1>
+                  {userProfile?.name || (mine ? "Your profile" : "Collector")}
+                  {mine ? <span className="tag">You</span> : null}
+                </h1>
+                <div className="profile-ids">
+                  <CopyLine label="Address" display={shortAddr(address)} value={address} />
+                  {explorer ? (
+                    <a className="profile-link-chip" href={explorer} target="_blank" rel="noreferrer">
+                      gnoscan
+                    </a>
+                  ) : null}
+                  {userProfile?.website ? (
+                    <a className="profile-link-chip" href={userProfile.website} target="_blank" rel="noreferrer">
+                      Website
+                    </a>
+                  ) : null}
+                  {userProfile?.twitter ? (
+                    <a
+                      className="profile-link-chip"
+                      href={userProfile.twitter.startsWith("http") ? userProfile.twitter : `https://x.com/${userProfile.twitter.replace(/^@/, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      X
+                    </a>
+                  ) : null}
+                  {userProfile?.discord ? (
+                    <a className="profile-link-chip" href={userProfile.discord} target="_blank" rel="noreferrer">
+                      Discord
+                    </a>
+                  ) : null}
+                </div>
+              </div>
               {mine ? (
-                <button className="btn" type="button" onClick={() => onOpenTab("sell")}>
-                  List an item
-                </button>
-              ) : null}
-              {mine && onSaveProfile ? (
-                <button
-                  className="btn primary"
-                  type="button"
-                  onClick={() => {
-                    setDraft(userProfile || emptyProfile());
-                    setEditing((v) => !v);
-                  }}
-                >
-                  {editing ? "Close editor" : "Edit profile"}
-                </button>
+                <div className="profile-hero-actions">
+                  <button className="btn" type="button" onClick={() => onOpenTab("sell")}>
+                    List
+                  </button>
+                  {onSaveProfile ? (
+                    <button
+                      className={editing ? "btn primary" : "btn"}
+                      type="button"
+                      onClick={() => {
+                        setDraft(userProfile || emptyProfile());
+                        setEditing((v) => !v);
+                      }}
+                    >
+                      {editing ? "Close" : "Edit"}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -274,10 +342,10 @@ export function Profile({
       <div className="col-tabs" role="tablist" aria-label="Profile">
         {(
           [
-            ["collected", "Collected"],
-            ["listed", "Listed"],
-            ["created", "Created"],
-            ["activity", "Activity"],
+            ["collected", `Collected ${collected.length}`],
+            ["listed", `Listed ${listed.length}`],
+            ["created", `Created ${created.length}`],
+            ["activity", `Activity${activity.length ? ` ${activity.length}` : ""}`],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -293,20 +361,152 @@ export function Profile({
         ))}
       </div>
 
-      {loading ? <p className="muted">Loading holdings…</p> : null}
+      {pane === "listed" ? (
+        <p className="muted">Listed items live on Nomaq. They leave Adena until you cancel or a buyer pays.</p>
+      ) : null}
+
+      {loading && (pane === "collected" || pane === "listed") && shown.length === 0 ? (
+        <SkeletonGrid />
+      ) : null}
+
+      {mine && pane === "collected" ? (
+        sendable.length > 0 && onListWallet ? (
+          <form
+            className="sweep-bar wallet-list"
+            aria-label="List wallet"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!canListWallet || blocked || busy) return;
+              onListWallet(walletChosen.map((item) => ({ item, priceUgnot: walletUgnot })));
+            }}
+          >
+            <p className="muted toolbar-count">
+              {shown.length} {shown.length === 1 ? "item" : "items"}
+            </p>
+            <span className="sweep-bar-label">List</span>
+            <label className="wallet-price">
+              <input
+                value={walletPrice}
+                onChange={(e) => setWalletPrice(e.target.value)}
+                inputMode="decimal"
+                placeholder="1.5"
+                aria-label="Wallet list price"
+              />
+              <span>GNOT</span>
+            </label>
+            <button className="text-btn" type="button" aria-label="Select all" onClick={() => selectWallet(true)}>
+              All
+            </button>
+            <button className="text-btn" type="button" aria-label="Clear" onClick={() => selectWallet(false)}>
+              None
+            </button>
+            <span className="sweep-bar-meta" aria-label={`${walletChosen.length} of ${sendable.length} still in the wallet`}>
+              <strong>{walletChosen.length}</strong>
+              <span className="muted">/ {sendable.length}</span>
+            </span>
+            {walletReceive > 0 ? (
+              <span className="sweep-bar-total" title="After the 2% protocol fee">
+                <PriceMark ugnot={walletReceive} />
+              </span>
+            ) : null}
+            <div className="sweep-actions">
+              <button className="btn primary" type="submit" disabled={blocked || busy || !canListWallet}>
+                {listButtonLabel(walletChosen.map(() => ({ listed: false })))}
+              </button>
+              {onTransfer ? (
+                <button className="btn" type="button" aria-pressed={sending} onClick={() => setSending((v) => !v)}>
+                  {sending ? "Close" : "Send"}
+                </button>
+              ) : null}
+            </div>
+          </form>
+        ) : (
+          <div className="collection-tools">
+            <p className="muted toolbar-count">
+              {shown.length} {shown.length === 1 ? "item" : "items"}
+            </p>
+            {onTransfer ? (
+              <button className={sending ? "btn primary" : "btn"} type="button" onClick={() => setSending((v) => !v)}>
+                {sending ? "Close send" : "Send NFT"}
+              </button>
+            ) : null}
+          </div>
+        )
+      ) : null}
+
+      {mine && pane === "collected" && onTransfer && sending ? (
+        <form
+          className="panel profile-send"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!canSend || !sendItem) return;
+            onTransfer(sendItem, sendTo.trim());
+          }}
+        >
+          {sendable.length === 0 ? (
+            <p className="muted">No unlisted items. Cancel a listing first.</p>
+          ) : (
+            <>
+              <div className="profile-send-row">
+                <label>
+                  Item
+                  <Select
+                    ariaLabel="Item to send"
+                    value={sendItem ? itemSendKey(sendItem) : ""}
+                    onChange={setSendKey}
+                    options={sendable.map((row) => ({
+                      value: itemSendKey(row),
+                      label: `#${row.id} ${row.name} · ${row.collection || "Nomaq"}`,
+                    }))}
+                  />
+                </label>
+                <label>
+                  To (g1)
+                  <input
+                    className="mono"
+                    value={sendTo}
+                    onChange={(e) => setSendTo(e.target.value.trim())}
+                    placeholder="g1…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Recipient g1 address"
+                  />
+                </label>
+                {connected ? (
+                  <button className="btn primary" type="submit" disabled={blocked || busy || !canSend}>
+                    Send
+                  </button>
+                ) : (
+                  <button className="btn primary" type="button" onClick={onConnect}>
+                    Connect Adena
+                  </button>
+                )}
+              </div>
+              {sendTo.trim() && !isG1Addr(sendTo) ? <p className="hint">Enter a 40-character g1 address.</p> : null}
+              {isG1Addr(sendTo) && sameAddr(sendTo, wallet) ? <p className="hint">Recipient must be a different wallet.</p> : null}
+            </>
+          )}
+        </form>
+      ) : null}
 
       {pane === "collected" || pane === "listed" ? (
-        shown.length > 0 ? (
+        loading && shown.length === 0 ? null : shown.length > 0 ? (
           <div className="listing-grid">
             {shown.map((row) => (
               <ListingCard
                 key={itemRowKey(row)}
                 item={row}
-                onOpen={onOpenItem}
+                onOpen={(item) => {
+                  setOpenItem(item);
+                  onNeedPeers?.(itemCollectionSlug(item));
+                }}
                 onBuy={onBuy}
-                onSell={mine ? onSell : undefined}
+                onSell={mine && (pane !== "collected" || row.listed) ? onSell : undefined}
+                onTogglePick={mine && pane === "collected" && onListWallet && !row.listed && row.id ? toggleWallet : undefined}
+                picked={!!walletOn[itemRowKey(row)]}
                 onCancel={mine ? onCancel : undefined}
                 onReveal={mine && onReveal ? (it) => onReveal(it.id) : undefined}
+                onSync={mine ? onSyncNft : undefined}
                 wallet={wallet}
                 owned={mine}
               />
@@ -405,6 +605,49 @@ export function Profile({
         )
       ) : null}
 
+      {openItem ? (
+        <ListingDrawer
+          item={openItem}
+          connected={connected}
+          blocked={blocked}
+          busy={busy}
+          owned={mine || sameAddr(openItem.owner, wallet) || sameAddr(openItem.seller, wallet)}
+          onClose={() => setOpenItem(null)}
+          onBuy={onBuy}
+          onSell={
+            mine
+              ? (item) => {
+                  if (!item.listed && item.id && onListWallet) {
+                    setOpenItem(null);
+                    setPane("collected");
+                    setPicked({ ...walletOn, [itemRowKey(item)]: true });
+                    return;
+                  }
+                  onSell?.(item);
+                }
+              : undefined
+          }
+          sellLabel={openItem && !openItem.listed && onListWallet ? "Include in list" : undefined}
+          onCancel={mine ? onCancel : undefined}
+          onConnect={onConnect}
+          onOpenCollection={(slug) => {
+            setOpenItem(null);
+            onOpenCollection(slug);
+          }}
+          wallet={wallet}
+          peers={(() => {
+            const slug = itemCollectionSlug(openItem);
+            if (collectionPeers[slug]?.length) return collectionPeers[slug];
+            const byKey = new Map<string, Item>();
+            for (const row of [...items, ...marketItems]) {
+              if (itemCollectionSlug(row) === slug) byKey.set(itemRowKey(row), row);
+            }
+            return [...byKey.values()];
+          })()}
+          activity={activity}
+          onSync={mine ? onSyncNft : undefined}
+        />
+      ) : null}
     </section>
   );
 }

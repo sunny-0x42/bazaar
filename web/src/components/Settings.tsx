@@ -1,5 +1,4 @@
-import { NETWORKS, UGNOT, type Network } from "../lib/chain";
-import { Select } from "./Select";
+import { UGNOT, type Network } from "../lib/chain";
 import { useEffect, useState } from "react";
 
 type Props = {
@@ -18,6 +17,7 @@ type Props = {
   onNetwork: (id: string) => void;
   isAdmin?: boolean;
   launchFeeUgnot?: number;
+  adminReserveFree?: boolean;
   onSetLaunchFee?: (ugnot: number) => void;
 };
 
@@ -34,9 +34,10 @@ export function Settings({
   onConnect,
   onSeed,
   network,
-  onNetwork,
+  onNetwork: _onNetwork,
   isAdmin,
   launchFeeUgnot = 0,
+  adminReserveFree = false,
   onSetLaunchFee,
 }: Props) {
   const [feeGnot, setFeeGnot] = useState("");
@@ -48,27 +49,19 @@ export function Settings({
       <header className="page-head">
         <h1>Settings</h1>
         <p className="muted">
-          Network and package paths. The UI reads GetModule("nft"), then GetModule("market"). Live default is nftv7.
-          Frozen books (nft–nftv5) stay on-chain — paste a path to read one. Factory is the local collection
-          registry at gno.land/r/bazaar/factory; Explore prefers factory rows when present.
+          Network and package paths. Explore reads bazaarv2 collections. Frozen books (nft–nftv7) stay on-chain — paste
+          a path to read one. Factory is bazaarv2; Adena collectables are each collection pkg, not the factory.
         </p>
       </header>
 
       <div className="panel form-narrow settings-panel">
         <div className="field-group">
           <h2>Network</h2>
-          <label>
-            Chain
-            <Select
-              ariaLabel="Chain"
-              value={network.id}
-              onChange={onNetwork}
-              options={NETWORKS.map((n) => ({
-                value: n.id,
-                label: `${n.chainName} (${n.chainId})`,
-              }))}
-            />
-          </label>
+          <p className="muted">
+            {network.id === "onyx"
+              ? "Onyx testnet (onyx-1). Adena stays on Onyx."
+              : "gno.land mainnet (gnoland-1). Other networks are not offered in this UI."}
+          </p>
         </div>
 
         <div className="field-group">
@@ -85,10 +78,8 @@ export function Settings({
             Factory package path
             <input className="mono" value={factory} onChange={(e) => onFactory(e.target.value)} spellCheck={false} />
             <span className="hint">
-              Local <span className="mono">gno.land/r/bazaar/factory</span>. Pearl{" "}
-              <span className="mono">…/bazaar/factoryv2</span>. Each collection is its own realm
-              (unique PackageAddress) at <span className="mono">gno.land/r/bazaar/c/{"{slug}"}</span>. Empty falls back
-              to nftv7 Explore.
+              Mainnet factory <span className="mono">…/bazaar/bazaarv2</span>. Each collection is its own realm at{" "}
+              <span className="mono">…/bazaar/c/{"{slug}"}</span>.
             </span>
           </label>
         </div>
@@ -97,8 +88,11 @@ export function Settings({
           <div className="field-group">
             <h2>Launchpad create fee</h2>
             <p className="muted">
-              Paid once when a creator launches a collection. Live now: {launchFeeUgnot / UGNOT} GNOT. Admin can change
-              this without a new package.
+              Paid once when a wallet launches a collection. Live now: {launchFeeUgnot / UGNOT} GNOT.{" "}
+              {adminReserveFree
+                ? "This wallet reserves with an empty send. Other wallets pay the fee above."
+                : "Every wallet, including this one, pays this fee on the current factory."}{" "}
+              Admin can change the fee without a new package.
             </p>
             <label>
               Fee (GNOT)

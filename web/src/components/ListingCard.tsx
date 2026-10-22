@@ -1,4 +1,5 @@
-import { canAddToCart, isOwnListing, isPreviewItem, type Item, type OfferRow } from "../lib/chain";
+import { canAddToCart, isOwnListing, isPreviewItem, rarityClass, type Item, type OfferRow } from "../lib/chain";
+import { nftCanSync } from "../lib/perksync";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
 
@@ -11,8 +12,12 @@ type Props = {
   onMakeOffer?: (item: Item) => void;
   onInstantSell?: (item: Item) => void;
   onReveal?: (item: Item) => void;
+  onSync?: (item: Item) => void;
   onCart?: (item: Item) => void;
   inCart?: boolean;
+  /** Wallet bulk list. Checked NFTs share one price on the profile bar. */
+  picked?: boolean;
+  onTogglePick?: (item: Item) => void;
   owned?: boolean;
   wallet?: string;
   topOffer?: OfferRow | null;
@@ -26,9 +31,11 @@ export function ListingCard({
   onCancel,
   onMakeOffer,
   onInstantSell,
-  onReveal,
+  onSync,
   onCart,
   inCart,
+  picked,
+  onTogglePick,
   owned,
   wallet,
   topOffer,
@@ -40,13 +47,12 @@ export function ListingCard({
   const canOffer = !!onMakeOffer && listed && !isOwnListing(item, wallet);
   const canCart = !!onCart && canAddToCart(item, wallet);
   const canInstant = !!onInstantSell && mine && !!topOffer && topOffer.amount > 0 && !!item.id && !preview;
-  const canReveal =
-    !!onReveal && mine && item.revealed === false && (item.slot ?? -1) >= 0 && !!item.id && !preview;
   const hidden = item.revealed === false && (item.slot ?? -1) >= 0;
+  const showNftSync = !!owned && !!onSync && nftCanSync(item);
 
   return (
     <article
-      className="listing-card is-compact"
+      className={`listing-card is-compact${picked ? " is-picked" : ""}`}
       role="button"
       tabIndex={0}
       aria-label={label}
@@ -60,7 +66,36 @@ export function ListingCard({
     >
       <div className="listing-card-media">
         <ItemArt name={item.name} image={item.image} />
-        {hidden ? <span className="rarity rarity-chip">Unrevealed</span> : null}
+        {hidden ? (
+          <span className="rarity rarity-chip">Unrevealed</span>
+        ) : item.rarity ? (
+          <span className={`${rarityClass(item.rarity)} rarity-chip`}>{item.rarity}</span>
+        ) : null}
+        {onTogglePick && !listed && !preview ? (
+          <button
+            className={`pick-fab${picked ? " is-on" : ""}`}
+            type="button"
+            aria-pressed={!!picked}
+            aria-label={picked ? `Remove #${item.id} from wallet list` : `Include #${item.id} in wallet list`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePick(item);
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden>
+              {picked ? (
+                <path
+                  d="M5 12.5 10 17.5 19 7"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+            </svg>
+          </button>
+        ) : null}
         {canCart ? (
           <button
             className={`cart-fab${inCart ? " is-on" : ""}`}
@@ -97,17 +132,24 @@ export function ListingCard({
             <div className="listing-price listing-price-muted">—</div>
           )}
         </div>
+        {showNftSync ? (
+          <button
+            className="btn primary nft-sync-btn"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSync?.(item);
+            }}
+          >
+            Sync NFT
+          </button>
+        ) : null}
       </div>
       <div
         className="card-actions"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {canReveal ? (
-          <button className="btn primary" type="button" onClick={() => onReveal?.(item)}>
-            Reveal
-          </button>
-        ) : null}
         {canInstant ? (
           <button className="btn primary" type="button" onClick={() => onInstantSell?.(item)}>
             Instant Sell
@@ -120,7 +162,7 @@ export function ListingCard({
         ) : null}
         {listed && isOwnListing(item, wallet) && !canInstant ? (
           <button className="btn" type="button" onClick={() => (onCancel ? onCancel(item) : onOpen(item))}>
-            Listed
+            Cancel listing
           </button>
         ) : null}
         {listed && !isOwnListing(item, wallet) ? (

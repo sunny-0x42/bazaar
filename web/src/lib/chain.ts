@@ -1,4 +1,4 @@
-export type NetworkId = "pearl" | "local";
+export type NetworkId = "pearl" | "local" | "mainnet" | "onyx";
 
 export type Network = {
   id: NetworkId;
@@ -27,19 +27,44 @@ export const LOCAL: Network = {
   faucet: "",
 };
 
-export const NETWORKS: Network[] = [PEARL, LOCAL];
-export const NET_KEY = "bazaar.network";
+export const MAINNET: Network = {
+  id: "mainnet",
+  chainId: "gnoland-1",
+  chainName: "gno.land",
+  rpcUrl: "https://rpc.gno.land:443",
+  gnoweb: "https://gno.land",
+  faucet: "",
+};
+
+/** gno.land testnet on the mainnet line. */
+export const ONYX: Network = {
+  id: "onyx",
+  chainId: "onyx-1",
+  chainName: "Gno Onyx",
+  rpcUrl: "https://rpc.onyx.testnets.gno.land:443",
+  gnoweb: "https://onyx.testnets.gno.land",
+  faucet: "https://onyx.testnets.gno.land/faucet",
+};
+
+/** Mainnet unless this build sets VITE_BAZAAR_NETWORK=onyx. Netlify leaves it unset. */
+function onyxLock(): boolean {
+  return import.meta.env.VITE_BAZAAR_NETWORK === "onyx";
+}
+
+/** Public Netlify UI is mainnet. The Vercel build sets the Onyx lock. Pearl and local stay in helpers. */
+export const NETWORKS: Network[] = onyxLock() ? [ONYX] : [MAINNET];
+export const NET_KEY = "bazaar.network.v2";
 
 export function networkById(id: string): Network {
-  return NETWORKS.find((n) => n.id === id) || PEARL;
+  if (id === "onyx") return ONYX;
+  if (id === "pearl") return PEARL;
+  if (id === "local") return LOCAL;
+  if (id === "mainnet") return MAINNET;
+  return onyxLock() ? ONYX : MAINNET;
 }
 
 export function loadNetwork(): Network {
-  try {
-    return networkById(localStorage.getItem(NET_KEY) || "pearl");
-  } catch {
-    return PEARL;
-  }
+  return onyxLock() ? ONYX : MAINNET;
 }
 
 export function saveNetwork(id: NetworkId) {
@@ -51,7 +76,7 @@ export function saveNetwork(id: NetworkId) {
 }
 
 export const UGNOT = 1_000_000;
-export const PROTOCOL_BPS = 50;
+export const PROTOCOL_BPS = 200;
 export const HUB_KEY = "bazaar.hub";
 export const MARKET_KEY = "bazaar.market";
 export const NFT_KEY = "bazaar.nft";
@@ -64,6 +89,24 @@ export const PEARL_BAZAAR = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt
 export const FACTORY_PKG = "gno.land/r/bazaar/factory";
 export const FACTORY_PKG_PEARL_V2 = `${PEARL_BAZAAR}/factoryv2`;
 export const FACTORY_PKG_PEARL = `${PEARL_BAZAAR}/factoryv3`;
+/** First factory on gnoland-1 (GPAO). Shown and probe cols. */
+export const FACTORY_PKG_MAINNET = `${PEARL_BAZAAR}/factory`;
+/** Magic Eden 2% protocol bps + SetProtocolBps. Frozen after bazaarv2. */
+export const FACTORY_PKG_MAINNET_V1 = `${PEARL_BAZAAR}/bazaarv1`;
+/** Reserve-only launch fee, locked refunds, Withdraw leaves reserves. Frozen. */
+export const FACTORY_PKG_MAINNET_V2 = `${PEARL_BAZAAR}/bazaarv2`;
+/** ProtocolSink + Genesis attach. Frozen after v4. */
+export const FACTORY_PKG_MAINNET_V3 = `${PEARL_BAZAAR}/bazaarv3`;
+/** ProtocolSink + SetDiscountPusher + gcol2. Onyx launches stay here. */
+export const FACTORY_PKG_MAINNET_V4 = `${PEARL_BAZAAR}/bazaarv4`;
+/** ReserveDue (admin pays 0) plus the v4 genesis hooks. Mainnet launches. */
+export const FACTORY_PKG_MAINNET_V5 = `${PEARL_BAZAAR}/bazaarv5`;
+export const GPUSH_PKG_MAINNET_V2 = `${PEARL_BAZAAR}/gpushv2`;
+export const GENESIS_PKG_MAINNET = `${PEARL_BAZAAR}/gcol2`;
+export const GPUSH_PKG_MAINNET = `${PEARL_BAZAAR}/gpush`;
+/** Genesis whitelist realm source only. UI stores the list off-chain. */
+export const WLIST_PKG_MAINNET = `${PEARL_BAZAAR}/wlist`;
+export const WLIST_OPENS_AT = 1_790_553_600;
 export const DEFAULT_FACTORY = FACTORY_PKG;
 
 export function normalizePkgPath(p: string): string {
@@ -95,38 +138,17 @@ export function loadMarket(): string {
 export function loadNft(): string {
   try {
     const stored = normalizePkgPath(localStorage.getItem(NFT_KEY) || "");
-    if (
-      !stored ||
-      stored === "gno.land/r/bazaar/nft" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nft" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv2" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv3" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv4" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv5" ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/nftv6"
-    ) {
-      return DEFAULT_NFT;
+    if (!stored || /\/nftv?\d*$/i.test(stored) || stored.endsWith("/nftv7")) {
+      return "";
     }
     return stored;
   } catch {
-    return DEFAULT_NFT;
+    return "";
   }
 }
 
 export function loadFactory(): string {
-  try {
-    const stored = normalizePkgPath(localStorage.getItem(FACTORY_KEY) || "");
-    if (
-      stored === `${PEARL_BAZAAR}/factory` ||
-      stored === "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/factory"
-    ) {
-      return FACTORY_PKG_PEARL;
-    }
-    if (!stored) return DEFAULT_FACTORY;
-    return stored;
-  } catch {
-    return DEFAULT_FACTORY;
-  }
+  return factoryPkgFor(loadNetwork().id);
 }
 
 export function saveHub(p: string) {
@@ -167,10 +189,25 @@ export function parseEvalInt(s: string): number {
   return m ? Number(m[0]) : 0;
 }
 
+/** qeval bool, either `true` or `(true bool)`. `false` wins if both words appear. */
+export function parseEvalBool(raw: string): boolean {
+  const s = String(raw).trim().toLowerCase();
+  if (!s || s.includes("false")) return false;
+  return s === "true" || s.startsWith("true") || s.includes("(true");
+}
+
+export function parseEvalAddress(s: string): string {
+  const m = String(s).match(/g1[0-9a-z]{38,}/i);
+  return m ? m[0] : "";
+}
+
 export function parseEvalString(s: string): string {
-  const first = String(s).split("\n")[0] ?? "";
-  const quoted = first.match(/"([\s\S]*)"/);
+  const blob = String(s).trim();
+  const full = blob.match(/^\("([\s\S]*)"\s*\w*\s*\)\s*$/);
+  if (full) return full[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  const quoted = blob.match(/"([\s\S]*)"/);
   if (quoted) return quoted[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  const first = blob.split("\n")[0] ?? "";
   return first.replace(/^\(|\)$/g, "").replace(/\s*string\s*$/, "").trim();
 }
 
@@ -213,6 +250,11 @@ function unwrapTokenURI(raw: string): string {
   if (!t) return "";
   if (/^data:application\/json/i.test(t) || /^(https?:\/\/|\/samples\/|ipfs:\/\/)/i.test(t)) return t;
   return parseEvalString(t).trim() || t;
+}
+
+/** Adena-shaped qeval (string TokenID). Fallback `TokenURI(1)` for frozen cols. */
+export function tokenURIExpr(id: string | number): string {
+  return `TokenURI(${JSON.stringify(String(id))})`;
 }
 
 /** Dual-read GRC721 TokenURI: JSON data URI (new col) or bare image URL (Foam). */
@@ -565,21 +607,103 @@ export type DropSale = {
   royaltyBps: number;
   wlPrice: number;
   wlSupply: number;
-  phase: "whitelist" | "public";
+  phase: "whitelist" | "public" | "closed";
   mintPrice: number;
+  wlStart: number;
+  wlEnd: number;
+  publicStart: number;
+  publicEnd: number;
 };
 
 export function parseDropSale(raw: string): DropSale {
   const text = parseEvalString(raw);
   const parts = text.split("|");
-  const phase = (parts[3] || "public").trim() === "whitelist" ? "whitelist" : "public";
+  const flag = (parts[3] || "public").trim();
+  const phase = flag === "whitelist" || flag === "closed" ? flag : "public";
   return {
     royaltyBps: parseNumPart(parts[0]),
     wlPrice: parseNumPart(parts[1]),
     wlSupply: parseNumPart(parts[2]),
     phase,
     mintPrice: parseNumPart(parts[4]),
+    wlStart: 0,
+    wlEnd: 0,
+    publicStart: 0,
+    publicEnd: 0,
   };
+}
+
+export type MintSchedule = { wlStart: number; wlEnd: number; publicStart: number; publicEnd: number };
+
+export function parseMintSchedule(raw: string): MintSchedule {
+  const parts = parseEvalString(raw).split("|");
+  if (parts.length < 3) {
+    return {
+      wlStart: parseNumPart(parts[0]),
+      wlEnd: 0,
+      publicStart: parseNumPart(parts[1]),
+      publicEnd: 0,
+    };
+  }
+  return {
+    wlStart: parseNumPart(parts[0]),
+    wlEnd: parseNumPart(parts[1]),
+    publicStart: parseNumPart(parts[2]),
+    publicEnd: parseNumPart(parts[3]),
+  };
+}
+
+export type PhaseMintCap = { wl: number; pub: number };
+
+export function parsePhaseMintCap(raw: string): PhaseMintCap {
+  const parts = parseEvalString(raw).split("|");
+  return { wl: parseNumPart(parts[0]), pub: parseNumPart(parts[1]) };
+}
+
+/** `YYYY-MM-DD HH:MM` as UTC. Empty input is unset. */
+export function parseUtcMinute(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/.exec(s);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const ms = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const d = new Date(ms);
+  if (
+    Number.isNaN(ms) ||
+    d.getUTCFullYear() !== year ||
+    d.getUTCMonth() !== month - 1 ||
+    d.getUTCDate() !== day ||
+    d.getUTCHours() !== hour ||
+    d.getUTCMinutes() !== minute
+  ) {
+    return null;
+  }
+  return Math.floor(ms / 1000);
+}
+
+/** Calendar date plus a 24-hour clock. A date with no time is 00:00 UTC. No date is unset. Seconds are dropped. */
+export function joinUtcMinute(date: string, time: string): string {
+  if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(date.trim())) return "";
+  const clock = /^(\d{2}):(\d{2})/.exec(time.trim());
+  const joined = `${date.trim()} ${clock ? `${clock[1]}:${clock[2]}` : "00:00"}`;
+  return parseUtcMinute(joined) == null ? "" : joined;
+}
+
+export function splitUtcMinute(value: string): { date: string; time: string } {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/.exec(value.trim());
+  return m ? { date: m[1], time: m[2] } : { date: "", time: "" };
+}
+
+export function formatUtcMinute(unix: number): string {
+  if (!unix) return "";
+  const d = new Date(unix * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
 }
 
 export function isPublicDrop(col: { drop?: boolean; maxSupply: number }): boolean {
@@ -588,6 +712,14 @@ export function isPublicDrop(col: { drop?: boolean; maxSupply: number }): boolea
 
 export function isOpenEdition(col: { drop?: boolean; maxSupply: number }): boolean {
   return isPublicDrop(col) && !(col.maxSupply > 0);
+}
+
+/** True when this realm is a Bazaar launchpad copy (`…/bazaar/c/{slug}`), which implements PublicMint. */
+export function isLaunchpadMint(col: { slug: string; pkg?: string }): boolean {
+  const slug = col.slug.trim().toLowerCase();
+  const pkg = normalizePkgPath(col.pkg || "").toLowerCase();
+  if (!slug || !isPkgPath(pkg)) return false;
+  return pkg.endsWith(`/bazaar/c/${slug}`);
 }
 
 export function parseCollectionLines(raw: string): ChainCollection[] {
@@ -647,7 +779,17 @@ export function parseFeaturedLines(raw: string): string[] {
   return out;
 }
 
-export function parseFactoryCollectionLines(raw: string): ChainCollection[] {
+/** Probe collections: hide and do not qeval. Future factory slugs stay visible. */
+export const HIDDEN_FACTORY_SLUGS = new Set(["test", "stdcol", "adcol", "col3333", "shown", "seafish"]);
+
+export function isPublicFactorySlug(slug: string): boolean {
+  return !!slug && !HIDDEN_FACTORY_SLUGS.has(slug.trim().toLowerCase());
+}
+
+export function parseFactoryCollectionLines(
+  raw: string,
+  opts?: { includeHidden?: boolean },
+): ChainCollection[] {
   const text = parseEvalString(raw);
   if (!text.trim()) return [];
   return text
@@ -655,7 +797,11 @@ export function parseFactoryCollectionLines(raw: string): ChainCollection[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map(parseFactoryCollectionLine)
-    .filter((row): row is ChainCollection => !!row);
+    .filter((row): row is ChainCollection => {
+      if (!row) return false;
+      if (opts?.includeHidden) return true;
+      return isPublicFactorySlug(row.slug);
+    });
 }
 
 export function collectionBookPath(
@@ -671,10 +817,13 @@ export function collectionBookPath(
 
 /** Local collection realm copied from `r/bazaar/col`. */
 export function factoryPkgFor(net: NetworkId): string {
-  return net === "local" ? FACTORY_PKG : FACTORY_PKG_PEARL;
+  if (net === "local") return FACTORY_PKG;
+  if (net === "onyx") return FACTORY_PKG_MAINNET_V5;
+  if (net === "mainnet") return FACTORY_PKG_MAINNET_V5;
+  return FACTORY_PKG_PEARL;
 }
 
-export function collectionRealmPath(slug: string, net: NetworkId = "pearl"): string {
+export function collectionRealmPath(slug: string, net: NetworkId = "mainnet"): string {
   const s = slug.trim().toLowerCase();
   if (net === "local") return `gno.land/r/bazaar/c/${s}`;
   return `${PEARL_BAZAAR}/c/${s}`;
@@ -716,6 +865,8 @@ const ACTIVITY_KIND_LABELS: Record<string, string> = {
   withdrawpool: "Pool out",
   depositnft: "NFT in pool",
   withdrawnft: "NFT out",
+  transfer: "Transfer",
+  init: "Created",
 };
 
 export function activityKindLabel(kind: string): string {
@@ -731,6 +882,17 @@ export function isLiveTrade(row: Activity): boolean {
 
 export function liveTradeRows(rows: Activity[], cap = 24): Activity[] {
   return rows.filter(isLiveTrade).slice(0, cap);
+}
+
+/**
+ * Home live tape. `slugs` null keeps every trade (legacy book).
+ * An array limits the tape to collections on the factory this UI is using.
+ */
+export function scopeLiveTape(rows: Activity[], slugs: string[] | null, cap = 24): Activity[] {
+  const trades = rows.filter(isLiveTrade);
+  if (slugs == null) return trades.slice(0, cap);
+  const allow = new Set(slugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean));
+  return trades.filter((row) => allow.has(row.slug.trim().toLowerCase())).slice(0, cap);
 }
 
 export function canAddToCart(item: Item, wallet?: string): boolean {
@@ -778,7 +940,7 @@ export function isOwnListing(item: Item, wallet?: string): boolean {
 }
 
 export function itemRowKey(item: Item): string {
-  if (item.id) return item.id;
+  if (item.id) return `${itemCollectionSlug(item)}:${item.id}`;
   return `preview:${item.collection}:${item.name}`;
 }
 
@@ -806,18 +968,30 @@ export function isIpfsUri(u: string): boolean {
   return /^ipfs:\/\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/\S*)?$/.test(u.trim());
 }
 
-export const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
+export const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
 
-/** nftv4 validImage is http(s) or /samples/ — map ipfs:// to a public gateway. */
+/** Gateways that no longer serve hotlinked art. New writes and the page both leave these. */
+const RETIRED_IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs/",
+  "https://dweb.link/ipfs/",
+  "https://w3s.link/ipfs/",
+  "https://nftstorage.link/ipfs/",
+];
+
+/** Chain image URL. ipfs:// and retired gateways become the live https gateway. */
 export function ipfsToHttp(u: string): string {
   const s = u.trim();
   const m = s.match(/^ipfs:\/\/(?:ipfs\/)?(.+)$/i);
-  if (!m) return s;
-  return IPFS_GATEWAY + m[1];
+  if (m) return IPFS_GATEWAY + m[1];
+  for (const prefix of RETIRED_IPFS_GATEWAYS) {
+    if (s.startsWith(prefix)) return IPFS_GATEWAY + s.slice(prefix.length);
+  }
+  return s;
 }
 
+/** Browser image URL. Same normalizer as the value stored on chain. */
 export function artSrc(u: string): string {
-  return ipfsToHttp(u.trim());
+  return ipfsToHttp(u);
 }
 
 export function isArtSrc(u: string): boolean {
@@ -890,6 +1064,20 @@ export function shortAddr(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+export function isG1Addr(a: string): boolean {
+  return /^g1[a-z0-9]{38}$/.test(a.trim());
+}
+
+export function itemSendKey(item: Item): string {
+  return itemRowKey(item);
+}
+
+/** What this wallet attaches to Reserve. null due means the factory has no ReserveDue. */
+export function reserveSendUgnot(launchFeeUgnot: number, due: number | null): number {
+  if (due == null || !Number.isFinite(due) || due < 0) return launchFeeUgnot;
+  return due;
+}
+
 export function protocolFeeUgnot(price: number, bps = PROTOCOL_BPS): number {
   if (price < 0 || bps < 0 || bps > 10000) return 0;
   const q = Math.floor(price / 10000);
@@ -944,8 +1132,16 @@ export function uniqueListingSymbols(listings: Listing[]): string[] {
 export const ITEM_SORTS = ["price", "name", "id"] as const;
 export type ItemSort = (typeof ITEM_SORTS)[number];
 
-export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary"] as const;
+export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"] as const;
 export type ItemRarity = (typeof ITEM_RARITIES)[number];
+
+const RARITY_TONES = new Set(["common", "uncommon", "rare", "epic", "legendary", "mythic"]);
+
+/** Chip class for a rarity tier. Unknown labels stay the plain chip. */
+export function rarityClass(rarity: string): string {
+  const k = rarity.trim().toLowerCase();
+  return RARITY_TONES.has(k) ? `rarity rarity-${k}` : "rarity";
+}
 
 export type ItemFilters = {
   query?: string;
@@ -977,6 +1173,11 @@ export function filterItems(items: Item[], query: string): Item[] {
       row.rarity.toLowerCase().includes(q)
     );
   });
+}
+
+/** True when the grid has at least one priced listing. Unlisted mints are not asks. */
+export function hasListedAsk(items: { listed?: boolean; price?: number }[]): boolean {
+  return items.some((row) => !!row.listed && (row.price || 0) > 0);
 }
 
 export function filterListedItems(items: Item[], filters: ItemFilters): Item[] {
@@ -1011,6 +1212,42 @@ export function itemTraitMap(item: Item): Record<string, string> {
   return map;
 }
 
+export type TraitShare = {
+  type: string;
+  value: string;
+  count: number;
+  total: number;
+  pct: number;
+};
+
+export function traitShares(item: Item, peers: Item[]): TraitShare[] {
+  const sample = peers.filter((row) => row.revealed !== false);
+  const total = sample.length;
+  const maps = sample.map((row) => itemTraitMap(row));
+  return Object.entries(itemTraitMap(item))
+    .map(([type, value]) => {
+      const count = total < 1 ? 0 : maps.filter((m) => m[type] === value).length;
+      const pct = total < 1 ? 0 : (count / total) * 100;
+      return { type, value, count, total, pct };
+    })
+    .sort((a, b) => a.pct - b.pct || a.type.localeCompare(b.type));
+}
+
+export function formatTraitPct(pct: number): string {
+  if (!(pct > 0)) return "0%";
+  if (pct < 1) return "<1%";
+  if (pct < 10) return `${pct.toFixed(1).replace(/\.0$/, "")}%`;
+  return `${Math.round(pct)}%`;
+}
+
+export function traitRarityKind(pct: number): "legendary" | "epic" | "rare" | "uncommon" | "" {
+  if (pct <= 2) return "legendary";
+  if (pct <= 5) return "epic";
+  if (pct <= 10) return "rare";
+  if (pct <= 25) return "uncommon";
+  return "";
+}
+
 export function itemMatchesTraits(item: Item, selected: Record<string, string[]>): boolean {
   const map = itemTraitMap(item);
   for (const [type, values] of Object.entries(selected)) {
@@ -1028,6 +1265,7 @@ export function traitGroups(items: Item[]): TraitGroup[] {
   for (const it of items) {
     const map = itemTraitMap(it);
     for (const [type, value] of Object.entries(map)) {
+      if (type.trim().toLowerCase() === "edition") continue;
       let inner = byType.get(type);
       if (!inner) {
         inner = new Map();
@@ -1049,8 +1287,75 @@ export function traitGroups(items: Item[]): TraitGroup[] {
   }));
 }
 
+/** Onyx trial only. Mainnet has no edition book. */
+export const ONYX_EDITION_PKG = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/edcol";
+export const ONYX_EFACTORY_PKG = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/efactory";
+
+export type EditionRow = {
+  id: string;
+  name: string;
+  image: string;
+  max: number;
+  minted: number;
+  mintPrice: number;
+};
+
+export type EditionListing = {
+  seller: string;
+  id: string;
+  amount: number;
+  unit: number;
+};
+
+/** Editions() is id|name|image|max|minted|mintPrice. */
+export function parseEditions(raw: string): EditionRow[] {
+  const text = parseEvalString(raw);
+  const out: EditionRow[] = [];
+  for (const line of text.split("\n")) {
+    const p = line.split("|");
+    if (p.length < 6 || !p[0]) continue;
+    out.push({
+      id: p[0],
+      name: p[1] || p[0],
+      image: p[2] || "",
+      max: Number(p[3]) || 0,
+      minted: Number(p[4]) || 0,
+      mintPrice: Number(p[5]) || 0,
+    });
+  }
+  return out;
+}
+
+/** OpenListings() is seller|id|amount|unitPrice. */
+export function parseOpenListings(raw: string): EditionListing[] {
+  const text = parseEvalString(raw);
+  const out: EditionListing[] = [];
+  for (const line of text.split("\n")) {
+    const p = line.split("|");
+    if (p.length < 4 || !isG1(p[0]) || !p[1]) continue;
+    out.push({
+      seller: p[0],
+      id: p[1],
+      amount: Number(p[2]) || 0,
+      unit: Number(p[3]) || 0,
+    });
+  }
+  return out;
+}
+
+/** ListEditions() field 5 is the creator. Field 7 is royalty bps. */
+export function parseEditionBook(raw: string, slug = "edcol"): { creator: string; royaltyBps: number } {
+  const text = parseEvalString(raw);
+  for (const line of text.split("\n")) {
+    const p = line.split("|");
+    if (p[0] !== slug) continue;
+    return { creator: p[5] || "", royaltyBps: Number(p[7]) || 0 };
+  }
+  return { creator: "", royaltyBps: 0 };
+}
+
 export type HashView = {
-  tab: "explore" | "sell" | "create" | "portfolio" | "settings" | "admin" | "guide";
+  tab: "explore" | "sell" | "create" | "portfolio" | "settings" | "admin" | "guide" | "genesis" | "rewards" | "editions";
   slug: string;
   itemId: string;
   profile: string;
@@ -1065,6 +1370,8 @@ export function parseHash(hash: string): HashView {
     .replace(/\/+$/, "");
   const mint = h.match(/^m\/([a-z0-9-]{1,32})$/i);
   if (mint) return { ...empty, mintSlug: mint[1].toLowerCase() };
+  const colItem = h.match(/^c\/([a-z0-9-]{1,32})\/(\d+)$/i);
+  if (colItem) return { ...empty, slug: colItem[1].toLowerCase(), itemId: colItem[2] };
   const col = h.match(/^c\/([a-z0-9-]{1,32})$/i);
   if (col) return { ...empty, slug: col[1].toLowerCase() };
   const item = h.match(/^i\/(\d+)$/);
@@ -1077,8 +1384,14 @@ export function parseHash(hash: string): HashView {
   if (h === "settings") return { ...empty, tab: "settings" };
   if (h === "admin") return { ...empty, tab: "admin" };
   if (h === "guide") return { ...empty, tab: "guide" };
+  if (h === "genesis" || h === "whitelist") return { ...empty, tab: "genesis" };
+  if (h === "rewards") return { ...empty, tab: "rewards" };
+  if (h === "editions") return { ...empty, tab: "editions" };
   return empty;
 }
+
+/** Collection mint desk opened from the home button and the Bazaar Gens nav item. */
+export const BAZAAR_GENS_MINT_SLUG = "bazaargens";
 
 export function mintHash(slug: string): string {
   return `#/m/${slug}`;
@@ -1088,7 +1401,9 @@ export function collectionHash(slug: string): string {
   return `#/c/${slug}`;
 }
 
-export function itemHash(id: string): string {
+export function itemHash(id: string, slug = ""): string {
+  const s = slug.trim().toLowerCase();
+  if (s) return `#/c/${s}/${id}`;
   return `#/i/${id}`;
 }
 
@@ -1103,13 +1418,34 @@ export function profileHash(addr: string): string {
   return `#/u/${addr}`;
 }
 
+/** Public path for a collection, mint desk, or item. Other pages stay on `/`. */
+export function sharePath(hash: string): string {
+  const route = parseHash(hash);
+  if (route.slug && route.itemId) return `/c/${route.slug}/${route.itemId}`;
+  if (route.slug) return `/c/${route.slug}`;
+  if (route.mintSlug) return `/m/${route.mintSlug}`;
+  if (route.itemId) return `/i/${route.itemId}`;
+  return "/";
+}
+
+const SHARE_PATH = /^\/(?:c\/[a-z0-9-]+(?:\/\d+)?|m\/[a-z0-9-]+|i\/\d+)$/i;
+
+/** Hash when present. Otherwise a public `/c`, `/m`, or `/i` path. */
+export function routeRaw(): string {
+  const hash = window.location.hash || "";
+  if (hash && hash !== "#" && hash !== "#/") return hash;
+  const path = (window.location.pathname || "/").replace(/\/+$/, "");
+  if (SHARE_PATH.test(path)) return `#${path}`;
+  return hash || "#/explore";
+}
+
 export function isG1(addr: string): boolean {
   return /^g1[a-z0-9]{20,}$/i.test(addr.trim());
 }
 
 export function accountExplorer(addr: string, net: Network): string {
   if (!isG1(addr)) return "";
-  if (net.id === "pearl") return `https://gnoscan.io/account/${addr}`;
+  if (net.id === "pearl" || net.id === "mainnet") return `https://gnoscan.io/account/${addr}`;
   return "";
 }
 
@@ -1142,6 +1478,13 @@ export function symbolHue(symbol: string): number {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0) % 360;
+}
+
+/** `vm/qpkgmeta_json` status. Empty when the path was never submitted. */
+export function pkgMetaStatus(raw: string): "live" | "inert" | "" {
+  if (/"status"\s*:\s*"live"/.test(raw)) return "live";
+  if (/"status"\s*:\s*"inert"/.test(raw)) return "inert";
+  return "";
 }
 
 export function isRealmUnavailable(message: string): boolean {

@@ -8,10 +8,8 @@ Off-chain reader for mint / list / buy / cancel / publicmint / drop. Does not re
 
 Sources (in order, merge by hash+index or kind+id+height):
 
-1. Pearl (or configured) **tx-indexer GraphQL** `getTransactions` where `success` and `MsgCall.pkg_path` eq `BAZAAR_NFT_PKG` (default `gno.land/r/bazaar/nft`). Parse `response.events` `GnoEvent`.
-2. Fallback **vm/qeval** `Activity()` / `ActivityByCollection` on `BAZAAR_RPC` (gnodev / Pearl).
-
-Pearl GraphQL: `https://indexer.pearl.testnets.gno.land/graphql/query`
+1. Mainnet **tx-indexer GraphQL** `https://indexer.gno.land/graphql/query` — `getTransactions` where `success` and `MsgCall.pkg_path` eq the **collection** pkg. Parse `response.events` `GnoEvent`.
+2. Fallback **vm/qeval** `Activity()` / `ActivityByCollection` on `https://rpc.gno.land:443` (many `col` realms have no `Activity()` tape; indexer is the Explore source).
 
 ## HTTP
 

@@ -8,6 +8,12 @@
   "discord": "",
   "maxSupply": 20,
   "mintPrice": "1",
+  "whitelist": {
+    "price": "0.5",
+    "cap": 8,
+    "opensUtc": "2026-09-28T00:00:00Z",
+    "publicStartUtc": "2026-09-28T12:00:00Z"
+  },
   "royaltyPct": 5,
   "hideUntilReveal": true,
   "items": [

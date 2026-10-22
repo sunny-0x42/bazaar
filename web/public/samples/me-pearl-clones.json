@@ -1,0 +1,179 @@
+[
+  {
+    "slug": "tffoxes",
+    "name": "TFF Foxes",
+    "cover": "https://famousfoxes.com/tff/5227.png",
+    "royaltyBps": 500,
+    "maxSupply": 8,
+    "mintPrice": 0,
+    "blob": "Fox #5227|https://famousfoxes.com/tff/5227.png|Common|Background:Green;Outfit:Sweater Dark;Skin:Natural\nFox #6516|https://famousfoxes.com/tff/6516.png|Rare|Background:Mint;Outfit:Scarf Purple;Skin:Natural\nFox #7443|https://famousfoxes.com/tff/7443.png|Common|Background:Alabaster;Outfit:Sweater Light;Skin:Natural\nFox #6314|https://famousfoxes.com/tff/6314.png|Uncommon|Background:Blue;Outfit:Shirt Flannel Green;Skin:Natural\nFox #4706|https://famousfoxes.com/tff/4706.png|Uncommon|Background:Champagne;Outfit:Shirt Flannel Blue;Skin:Natural\nFox #7|https://famousfoxes.com/tff/7.png|Uncommon|Background:Yellow;Outfit:Scarf Red;Skin:Natural\nFox #7511|https://famousfoxes.com/tff/7511.png|Rare|Background:Sky;Outfit:Shirt Flannel Blue;Skin:Natural\nFox #5943|https://famousfoxes.com/tff/5943.png|Rare|Background:Emerald;Outfit:T-Shirt Yellow;Skin:Natural",
+    "items": [
+      {
+        "name": "Fox #5227",
+        "image": "https://famousfoxes.com/tff/5227.png",
+        "rarity": "Common",
+        "traits": "Background:Green;Outfit:Sweater Dark;Skin:Natural"
+      },
+      {
+        "name": "Fox #6516",
+        "image": "https://famousfoxes.com/tff/6516.png",
+        "rarity": "Rare",
+        "traits": "Background:Mint;Outfit:Scarf Purple;Skin:Natural"
+      },
+      {
+        "name": "Fox #7443",
+        "image": "https://famousfoxes.com/tff/7443.png",
+        "rarity": "Common",
+        "traits": "Background:Alabaster;Outfit:Sweater Light;Skin:Natural"
+      },
+      {
+        "name": "Fox #6314",
+        "image": "https://famousfoxes.com/tff/6314.png",
+        "rarity": "Uncommon",
+        "traits": "Background:Blue;Outfit:Shirt Flannel Green;Skin:Natural"
+      },
+      {
+        "name": "Fox #4706",
+        "image": "https://famousfoxes.com/tff/4706.png",
+        "rarity": "Uncommon",
+        "traits": "Background:Champagne;Outfit:Shirt Flannel Blue;Skin:Natural"
+      },
+      {
+        "name": "Fox #7",
+        "image": "https://famousfoxes.com/tff/7.png",
+        "rarity": "Uncommon",
+        "traits": "Background:Yellow;Outfit:Scarf Red;Skin:Natural"
+      },
+      {
+        "name": "Fox #7511",
+        "image": "https://famousfoxes.com/tff/7511.png",
+        "rarity": "Rare",
+        "traits": "Background:Sky;Outfit:Shirt Flannel Blue;Skin:Natural"
+      },
+      {
+        "name": "Fox #5943",
+        "image": "https://famousfoxes.com/tff/5943.png",
+        "rarity": "Rare",
+        "traits": "Background:Emerald;Outfit:T-Shirt Yellow;Skin:Natural"
+      }
+    ]
+  },
+  {
+    "slug": "ffoxes",
+    "name": "Famous Foxes",
+    "cover": "https://famousfoxes.com/hd/7216.png",
+    "royaltyBps": 500,
+    "maxSupply": 8,
+    "mintPrice": 0,
+    "blob": "Fox #7216|https://famousfoxes.com/hd/7216.png|Uncommon|Background:Champagne;Outfit:Sweater Green;Skin:Natural\nFox #8718|https://famousfoxes.com/hd/8718.png|Common|Background:Rose;Outfit:Jacket Denim;Skin:Natural\nFox #7098|https://famousfoxes.com/hd/7098.png|Rare|Background:Orange;Outfit:Shirt Flannel Blue;Skin:Natural\nFox #5830|https://famousfoxes.com/hd/5830.png|Common|Background:Yellow;Outfit:Shirt Flannel Red;Skin:Natural\nFox #9129|https://famousfoxes.com/hd/9129.png|Common|Background:Amaranth;Outfit:Turtleneck Leaf;Skin:Natural\nFox #6401|https://famousfoxes.com/hd/6401.png|Common|Background:Emerald;Outfit:Turtleneck Dark;Skin:Natural\nFox #9914|https://famousfoxes.com/hd/9914.png|Common|Background:Straw;Outfit:T-Shirt Foxy;Skin:Natural\nFox #5207|https://famousfoxes.com/hd/5207.png|Common|Background:Violet;Outfit:Tank Top Dark;Skin:Natural",
+    "items": [
+      {
+        "name": "Fox #7216",
+        "image": "https://famousfoxes.com/hd/7216.png",
+        "rarity": "Uncommon",
+        "traits": "Background:Champagne;Outfit:Sweater Green;Skin:Natural"
+      },
+      {
+        "name": "Fox #8718",
+        "image": "https://famousfoxes.com/hd/8718.png",
+        "rarity": "Common",
+        "traits": "Background:Rose;Outfit:Jacket Denim;Skin:Natural"
+      },
+      {
+        "name": "Fox #7098",
+        "image": "https://famousfoxes.com/hd/7098.png",
+        "rarity": "Rare",
+        "traits": "Background:Orange;Outfit:Shirt Flannel Blue;Skin:Natural"
+      },
+      {
+        "name": "Fox #5830",
+        "image": "https://famousfoxes.com/hd/5830.png",
+        "rarity": "Common",
+        "traits": "Background:Yellow;Outfit:Shirt Flannel Red;Skin:Natural"
+      },
+      {
+        "name": "Fox #9129",
+        "image": "https://famousfoxes.com/hd/9129.png",
+        "rarity": "Common",
+        "traits": "Background:Amaranth;Outfit:Turtleneck Leaf;Skin:Natural"
+      },
+      {
+        "name": "Fox #6401",
+        "image": "https://famousfoxes.com/hd/6401.png",
+        "rarity": "Common",
+        "traits": "Background:Emerald;Outfit:Turtleneck Dark;Skin:Natural"
+      },
+      {
+        "name": "Fox #9914",
+        "image": "https://famousfoxes.com/hd/9914.png",
+        "rarity": "Common",
+        "traits": "Background:Straw;Outfit:T-Shirt Foxy;Skin:Natural"
+      },
+      {
+        "name": "Fox #5207",
+        "image": "https://famousfoxes.com/hd/5207.png",
+        "rarity": "Common",
+        "traits": "Background:Violet;Outfit:Tank Top Dark;Skin:Natural"
+      }
+    ]
+  },
+  {
+    "slug": "madlads",
+    "name": "Mad Lads",
+    "cover": "https://madlads.s3.us-west-2.amazonaws.com/images/3212.png",
+    "royaltyBps": 500,
+    "maxSupply": 8,
+    "mintPrice": 0,
+    "blob": "Mad Lads #3212|https://madlads.s3.us-west-2.amazonaws.com/images/3212.png|Common|Gender:Male;Type:Light;Expression:Joy\nMad Lads #1984|https://madlads.s3.us-west-2.amazonaws.com/images/1984.png|Common|Gender:Male;Type:Light;Expression:Shocked\nMad Lads #1590|https://madlads.s3.us-west-2.amazonaws.com/images/1590.png|Common|Gender:Male;Type:Light;Expression:Serious\nMad Lads #7578|https://madlads.s3.us-west-2.amazonaws.com/images/7578.png|Common|Gender:Male;Type:Android;Expression:Android\nMad Lads #6865|https://madlads.s3.us-west-2.amazonaws.com/images/6865.png|Rare|Gender:Male;Type:Light;Expression:Albert\nMad Lads #8404|https://madlads.s3.us-west-2.amazonaws.com/images/8404.png|Uncommon|Gender:Male;Type:Android;Expression:Android\nMad Lads #2526|https://madlads.s3.us-west-2.amazonaws.com/images/2526.png|Common|Gender:Male;Type:Light;Expression:Smile\nMad Lads #9828|https://madlads.s3.us-west-2.amazonaws.com/images/9828.png|Common|Gender:Male;Type:Light;Expression:Shocked",
+    "items": [
+      {
+        "name": "Mad Lads #3212",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/3212.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Light;Expression:Joy"
+      },
+      {
+        "name": "Mad Lads #1984",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/1984.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Light;Expression:Shocked"
+      },
+      {
+        "name": "Mad Lads #1590",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/1590.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Light;Expression:Serious"
+      },
+      {
+        "name": "Mad Lads #7578",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/7578.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Android;Expression:Android"
+      },
+      {
+        "name": "Mad Lads #6865",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/6865.png",
+        "rarity": "Rare",
+        "traits": "Gender:Male;Type:Light;Expression:Albert"
+      },
+      {
+        "name": "Mad Lads #8404",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/8404.png",
+        "rarity": "Uncommon",
+        "traits": "Gender:Male;Type:Android;Expression:Android"
+      },
+      {
+        "name": "Mad Lads #2526",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/2526.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Light;Expression:Smile"
+      },
+      {
+        "name": "Mad Lads #9828",
+        "image": "https://madlads.s3.us-west-2.amazonaws.com/images/9828.png",
+        "rarity": "Common",
+        "traits": "Gender:Male;Type:Light;Expression:Shocked"
+      }
+    ]
+  }
+]

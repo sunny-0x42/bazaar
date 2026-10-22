@@ -1,5 +1,5 @@
 import { listedShare, type CollectionMarket, type ExploreCollection } from "../lib/catalog";
-import { isOpenEdition, isPublicDrop, shortPkgPath } from "../lib/chain";
+import { isLaunchpadMint, isOpenEdition, isPublicDrop, shortPkgPath } from "../lib/chain";
 import { CopyLine } from "./CopyLine";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
@@ -26,7 +26,7 @@ export function FeaturedCollections({ title, collections, markets, onOpen, onMin
           const open = isOpenEdition(col);
           const remaining = open ? 0 : Math.max(0, col.maxSupply - col.minted);
           const royaltyBps = col.royaltyBps ?? 0;
-          const mintable = isPublicDrop(col);
+          const mintable = launchpad && isPublicDrop(col) && isLaunchpadMint(col);
           return (
             <article
               key={col.slug}
@@ -43,7 +43,7 @@ export function FeaturedCollections({ title, collections, markets, onOpen, onMin
               }}
             >
               <div className="featured-cover">
-                <ItemArt name={col.name} image={col.cover} alt="" />
+                <ItemArt name={col.name} image={col.cover} alt="" priority />
               </div>
               <div className="featured-body">
                 <h3>
@@ -55,7 +55,7 @@ export function FeaturedCollections({ title, collections, markets, onOpen, onMin
                   ) : null}
                 </h3>
                 {col.pkg ? <CopyLine display={shortPkgPath(col.pkg)} value={col.pkg} /> : null}
-                {launchpad ? (
+                {mintable ? (
                   <>
                     <dl className="featured-stats">
                       <div>

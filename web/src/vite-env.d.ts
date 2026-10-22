@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 export {};
 
 type AdenaRes = {
@@ -16,10 +17,16 @@ type AdenaRes = {
 
 type Adena = {
   AddEstablish: (name: string) => Promise<AdenaRes>;
-  AddNetwork: (net: { chainId: string; chainName: string; rpcUrl: string }) => Promise<AdenaRes>;
+  AddNetwork: (net: {
+    chainId: string;
+    chainName: string;
+    rpcUrl: string;
+    indexerUrl?: string;
+  }) => Promise<AdenaRes>;
   SwitchNetwork: (chainId: string | { chainId: string }) => Promise<AdenaRes>;
   GetAccount: () => Promise<AdenaRes>;
   GetNetwork?: () => Promise<AdenaRes>;
+  Disconnect?: () => Promise<AdenaRes>;
   DoContract: (req: Record<string, unknown>) => Promise<AdenaRes>;
 };
 

@@ -8,20 +8,19 @@ type Props = {
 };
 
 export function Guide({ network, onTab, onExploreHome }: Props) {
-  const pearl = network.id === "pearl";
   return (
     <section className="page guide-page">
       <header className="page-head">
         <h1>Guide</h1>
-        <p className="muted">How Bazaar works on gno.land. Unique NFTs, fixed GNOT prices, Adena.</p>
+        <p className="muted">How Nomaq works on gno.land. Unique NFTs, fixed GNOT prices, Adena.</p>
       </header>
 
       <article className="guide-block">
-        <h2>What Bazaar is</h2>
+        <h2>What Nomaq is</h2>
         <p>
           A collection launchpad and secondary book. Each live collection is its own Gno realm (its own package
           path and <span className="mono">g1</span> address). Items are unique GRC721 tokens, listed at a fixed GNOT
-          price. Not a DEX, not a token pad, not the Gnomies collection.
+          price.
         </p>
       </article>
 
@@ -36,7 +35,7 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
             and connect on this site.
           </li>
           <li>
-            Use {pearl ? "Pearl (pearl-1)" : "local gnodev"} in the header. Mismatch shows a network warning.
+            Use {network.chainName} ({network.chainId}) in the header. Mismatch shows a network warning.
           </li>
           {network.faucet ? (
             <li>
@@ -58,7 +57,7 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
             <button className="text-btn" type="button" onClick={onExploreHome}>
               Explore
             </button>{" "}
-            and pick a launchpad, or go to <span className="mono">#/m/slug</span>.
+            and pick a launchpad, or go to <span className="mono">/m/slug</span>.
           </li>
           <li>Connect Adena. Pay the mint price in GNOT (or free if the drop is 0). Primary mint is 0 bps — GNOT goes to the creator.</li>
           <li>Your NFT lives on that collection realm. Nomaq reads the image from the item. Adena does not render Bazaar Gens — see Adena collectables below.</li>
@@ -72,9 +71,9 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
             <button className="text-btn" type="button" onClick={() => onTab("sell")}>
               Sell
             </button>{" "}
-            lists an item you own at a fixed GNOT price. The NFT moves into realm escrow until sold or cancelled.
+            lists one or more items you own. Up to 20 share one Adena signature. Each NFT moves into realm escrow until sold or cancelled.
           </li>
-          <li>Buy from Explore or the collection page. Secondary fee is 50 bps protocol plus creator royalty (0–10%, set at launch).</li>
+          <li>Buy from Explore or the collection page. Secondary fee is 2% protocol (admin can change; collections read it on Buy) plus creator royalty (0–10%, set at launch).</li>
           <li>Listed items are not in your wallet balance until you cancel or someone buys.</li>
         </ol>
       </article>
@@ -92,20 +91,22 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
           </li>
           <li>Set name, cover, supply, mint price, and royalty (0–10% on secondary sales).</li>
           <li>
-            On Pearl, the collection package must exist first (Bazaar addpkg). Then Adena{" "}
-            <strong>Initialize</strong> — pay the platform reserve fee (shown on Launch; admin can change it). If you
-            already Reserved the slug, Initialize sends nothing extra.
+            Nomaq addpkg the collection realm first. Then Adena <strong>Reserve</strong> (LaunchFee, shown on Launch;
+            admin can change it; the factory admin wallet pays 0 when the factory waives that reserve) and <strong>Init</strong> with empty send.
           </li>
-          <li>Collectors mint at <span className="mono">#/m/slug</span>.</li>
+          <li>Collectors mint at <span className="mono">/m/slug</span>.</li>
         </ol>
       </article>
 
       <article className="guide-block">
         <h2>Fees</h2>
         <ul>
-          <li>Create / reserve collection: platform <span className="mono">LaunchFee</span> in GNOT.</li>
+          <li>
+            Create / reserve collection: platform <span className="mono">LaunchFee</span> in GNOT. Launch shows what this
+            wallet will send. The factory admin wallet pays 0 when the factory waives that reserve.
+          </li>
           <li>Primary mint: 0 bps to the protocol.</li>
-          <li>Secondary buy: 50 bps protocol + creator royalty.</li>
+          <li>Secondary buy: 2% protocol (admin) + creator royalty.</li>
           <li>No self-buy. Send only native ugnot (GNOT).</li>
         </ul>
       </article>
@@ -113,8 +114,8 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
       <article className="guide-block">
         <h2>List without launching here</h2>
         <p>
-          Bazaar cannot pull an NFT contract it does not know. Gno has no runtime{" "}
-          <span className="mono">TransferFrom</span> of a foreign package. To sell on Bazaar you still need a
+          Nomaq cannot pull an NFT contract it does not know. Gno has no runtime{" "}
+          <span className="mono">TransferFrom</span> of a foreign package. To sell on Nomaq you still need a
           collection realm that implements list and buy (the public <span className="mono">col</span> template).
         </p>
         <ol>
@@ -124,7 +125,7 @@ export function Guide({ network, onTab, onExploreHome }: Props) {
             can skip the Launch wizard.
           </li>
           <li>
-            To appear on Explore, register with the Bazaar factory (reserve / launch fee, then Init). Otherwise Sell
+            To appear on Explore, register with the Nomaq factory (reserve / launch fee, then Init). Otherwise Sell
             still works if the UI is pointed at your pkg.
           </li>
           <li>

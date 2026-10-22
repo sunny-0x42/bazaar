@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   activityKindLabel,
   canAddToCart,
   isOwnListing,
-  itemTraitMap,
+  formatTraitPct,
+  rarityClass,
+  traitRarityKind,
+  traitShares,
   isPreviewItem,
   protocolFeeLabel,
   shortAddr,
@@ -13,6 +16,7 @@ import {
   type OfferRow,
 } from "../lib/chain";
 import type { ChartPoint } from "../lib/chart";
+import { nftCanSync } from "../lib/perksync";
 import { ItemArt } from "./ItemArt";
 import { PriceChart } from "./PriceChart";
 import { PriceMark } from "./PriceMark";
@@ -27,6 +31,7 @@ type Props = {
   onClose: () => void;
   onBuy: (item: Item) => void;
   onSell?: (item: Item) => void;
+  sellLabel?: string;
   onCancel?: (item: Item) => void;
   onConnect: () => void;
   onOpenCollection?: (slug: string) => void;
@@ -40,6 +45,7 @@ type Props = {
   activity?: Activity[];
   onCart?: (item: Item) => void;
   inCart?: boolean;
+  onSync?: (item: Item) => void;
 };
 
 export function ListingDrawer({
@@ -52,12 +58,13 @@ export function ListingDrawer({
   onClose,
   onBuy,
   onSell,
+  sellLabel,
   onCancel,
   onConnect,
   onOpenCollection,
   wallet,
   onOffer,
-  onDepositNft,
+
   topOffer,
   onInstantSell,
   onOpenProfile,
@@ -65,25 +72,19 @@ export function ListingDrawer({
   activity = [],
   onCart,
   inCart,
+  onSync,
 }: Props) {
-
   const [offerGnot, setOfferGnot] = useState("1");
   const listed = item.listed && item.price > 0;
   const preview = isPreviewItem(item);
   const mine = isOwnListing(item, wallet);
-  const collection = item.collection || "bazaar";
-  const traits = itemTraitMap(item);
-  const traitEntries = Object.entries(traits);
+  const collection = item.collection || "Nomaq";
+  const shares = traitShares(item, peers);
   const canCart = !!onCart && canAddToCart(item, wallet);
   const itemTape = activity.filter((row) => row.id && row.id === item.id).slice(0, 8);
-  function traitPct(type: string, value: string): string {
-    if (peers.length < 1) return "";
-    const n = peers.filter((it) => itemTraitMap(it)[type] === value).length;
-    return `${Math.max(1, Math.round((n / peers.length) * 100))}%`;
-  }
   const canOpenCollection = !!item.collection && !!onOpenCollection;
-  const canOffer = listed && !mine && !owned && (!!onOffer || !!onConnect);
-  const canPool = !!item.id && !preview && !!owned && !listed && !!onDepositNft;
+  const canOffer = listed && !mine && !owned && !!onOffer;
+
   const canInstant =
     !!item.id && !preview && (mine || !!owned) && !!topOffer && topOffer.amount > 0 && !!onInstantSell;
 
@@ -95,6 +96,100 @@ export function ListingDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  function Addr({ addr }: { addr: string }) {
+    if (!addr) return <span>—</span>;
+    if (onOpenProfile) {
+      return (
+        <button className="text-btn" type="button" onClick={() => onOpenProfile(addr)}>
+          {shortAddr(addr)}
+        </button>
+      );
+    }
+    return <span className="mono">{shortAddr(addr)}</span>;
+  }
+
+  let actions: ReactNode;
+  if (listed && mine) {
+    actions = (
+      <>
+        <p className="hint">
+          You listed this item. It is in realm escrow, so it leaves Adena until you cancel or a buyer pays.
+        </p>
+        {canInstant ? (
+          <button
+            className="btn primary btn-block"
+            type="button"
+            disabled={blocked || busy}
+            onClick={() => onInstantSell?.(item.id)}
+          >
+            Instant Sell · <PriceMark ugnot={topOffer?.amount || 0} size={13} />
+          </button>
+        ) : null}
+        {onSell ? (
+          <button className="btn btn-block" type="button" onClick={() => onSell(item)}>
+            Update price
+          </button>
+        ) : null}
+        {onCancel ? (
+          <button className="btn btn-block" type="button" disabled={blocked || busy} onClick={() => onCancel(item)}>
+            Cancel listing
+          </button>
+        ) : null}
+      </>
+    );
+  } else if (listed) {
+    actions = connected ? (
+      canCart ? (
+        <div className="item-cta-row">
+          <button className="btn primary" type="button" disabled={blocked || busy} onClick={() => onBuy(item)}>
+            Buy now
+          </button>
+          <button className="btn" type="button" onClick={() => onCart?.(item)}>
+            {inCart ? "In cart" : "Add to cart"}
+          </button>
+        </div>
+      ) : (
+        <button className="btn primary btn-block" type="button" disabled={blocked || busy} onClick={() => onBuy(item)}>
+          Buy now
+        </button>
+      )
+    ) : (
+      <button className="btn primary btn-block" type="button" onClick={onConnect}>
+        Connect Adena to buy
+      </button>
+    );
+  } else if (owned && onSell) {
+    actions = (
+      <>
+        {canInstant ? (
+          <button
+            className="btn primary btn-block"
+            type="button"
+            disabled={blocked || busy}
+            onClick={() => onInstantSell?.(item.id)}
+          >
+            Instant Sell · <PriceMark ugnot={topOffer?.amount || 0} size={13} />
+          </button>
+        ) : null}
+        <p className="hint">
+          {sellLabel
+            ? "Checked items on your profile share one GNOT price."
+            : "Sell moves this NFT to the collection realm until you cancel or a buyer pays."}
+        </p>
+        <button className="btn primary btn-block" type="button" onClick={() => onSell(item)}>
+          {sellLabel || "Sell"}
+        </button>
+
+      </>
+    );
+  } else {
+    actions = (
+      <p className="muted">
+        {preview ? "Connect on local gnodev to buy and sell this item." : "Not listed."}
+      </p>
+    );
+  }
+
   return (
     <div className="drawer-root">
       <button className="drawer-overlay" type="button" aria-label="Close item" onClick={onClose} />
@@ -102,85 +197,115 @@ export function ListingDrawer({
         <button className="icon-btn item-detail-close" type="button" aria-label="Close" onClick={onClose}>
           ×
         </button>
+
         <div className="item-detail-art">
-          <ItemArt name={item.name} image={item.image} alt={item.name} />
+          <ItemArt name={item.name} image={item.image} alt={item.name} priority />
         </div>
+
         <div className="item-detail-body">
-          <div className="item-detail-copy">
+          <div className="item-detail-head">
             {canOpenCollection ? (
               <button
-                className="collection-link is-link mono"
+                className="collection-link is-link"
                 type="button"
                 onClick={() => onOpenCollection(item.collection)}
               >
                 {collection}
               </button>
             ) : (
-              <span className="collection-link mono">{collection}</span>
+              <span className="collection-link">{collection}</span>
             )}
-            <h2 id="drawer-title">{item.name}</h2>
-            {item.id ? <p className="muted">Token #{item.id}</p> : null}
-
-            <div className="item-price-box">
-              <span className="muted">{listed ? "Listed for" : topOffer ? "Top offer" : "Unlisted"}</span>
-              <div className="item-price-box-amt">
-                {listed ? (
-                  <PriceMark ugnot={item.price} size={20} />
-                ) : topOffer ? (
-                  <PriceMark ugnot={topOffer.amount} size={20} />
-                ) : (
-                  "—"
-                )}
-              </div>
-              {listed ? <p className="hint">{protocolFeeLabel()} protocol included in the price.</p> : null}
+            <div className="item-detail-title">
+              <h2 id="drawer-title">{item.name}</h2>
+              {item.id ? <span className="item-token-id mono">#{item.id}</span> : null}
+              {item.rarity ? <span className={rarityClass(item.rarity)}>{item.rarity}</span> : null}
             </div>
+            <p className="item-owned">
+              Owned by <Addr addr={item.owner} />
+            </p>
+          </div>
 
-            <div className="properties">
-              <h3>Attributes</h3>
-              {item.revealed === false && (item.slot ?? -1) >= 0 ? (
-                <p className="hint">Hidden until the owner reveals.</p>
-              ) : traitEntries.length > 0 ? (
-              <div className="properties-grid">
-                {traitEntries.map(([type, value]) => (
-                  <div className="property" key={`${type}:${value}`}>
-                    <span className="property-type">{type}</span>
-                    <span className="property-value">{value}</span>
-                    {peers.length > 0 ? <span className="property-pct muted">{traitPct(type, value)}</span> : null}
-                  </div>
-                ))}
-              </div>
+          <div className="item-price-box">
+            <span className="item-price-box-label">
+              {listed ? "Current price" : topOffer ? "Top offer" : "Unlisted"}
+            </span>
+            <div className="item-price-box-amt">
+              {listed ? (
+                <PriceMark ugnot={item.price} size={32} />
+              ) : topOffer ? (
+                <PriceMark ugnot={topOffer.amount} size={32} />
               ) : (
-                <p className="hint">No attributes on this item.</p>
+                "—"
               )}
             </div>
+            {listed ? <p className="hint">{protocolFeeLabel()} protocol included in the price.</p> : null}
+            <div className="item-detail-cta">
+              {(owned || mine) && onSync && nftCanSync(item) ? (
+                <>
+                  <button
+                    className="btn primary btn-block"
+                    type="button"
+                    disabled={blocked || busy}
+                    onClick={() => onSync(item)}
+                  >
+                    {busy ? "Syncing…" : "Sync NFT"}
+                  </button>
+                  <p className="hint">Sync records this NFT. Claim is on Rewards.</p>
+                </>
+              ) : null}
+              {actions}
+            </div>
+            {canOffer ? (
+              <div className="drawer-offer">
+                {connected ? (
+                  <div className="item-offer-row">
+                    <label>
+                      <span className="sr-only">Offer (GNOT)</span>
+                      <input
+                        inputMode="decimal"
+                        value={offerGnot}
+                        onChange={(e) => setOfferGnot(e.target.value)}
+                        aria-label="Offer (GNOT)"
+                        placeholder="Offer (GNOT)"
+                      />
+                    </label>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={blocked || busy || !item.id || !onOffer}
+                      onClick={() => onOffer?.(item.id, ugnotFromGnot(offerGnot))}
+                    >
+                      Make offer
+                    </button>
+                  </div>
+                ) : (
+                  <button className="btn btn-block" type="button" onClick={onConnect}>
+                    Connect Adena to offer
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
 
+          <div className="item-details-card">
+            <h3>Details</h3>
             <dl className="drawer-facts">
+              {item.id ? (
+                <div>
+                  <dt>Token</dt>
+                  <dd className="mono">#{item.id}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Owner</dt>
                 <dd className="mono">
-                  {item.owner && onOpenProfile ? (
-                    <button className="text-btn" type="button" onClick={() => onOpenProfile(item.owner)}>
-                      {shortAddr(item.owner)}
-                    </button>
-                  ) : item.owner ? (
-                    shortAddr(item.owner)
-                  ) : (
-                    "—"
-                  )}
+                  <Addr addr={item.owner} />
                 </dd>
               </div>
               <div>
                 <dt>Seller</dt>
                 <dd className="mono">
-                  {item.seller && onOpenProfile ? (
-                    <button className="text-btn" type="button" onClick={() => onOpenProfile(item.seller)}>
-                      {shortAddr(item.seller)}
-                    </button>
-                  ) : item.seller ? (
-                    shortAddr(item.seller)
-                  ) : (
-                    "—"
-                  )}
+                  <Addr addr={item.seller} />
                 </dd>
               </div>
               {topOffer && topOffer.amount > 0 ? (
@@ -192,131 +317,57 @@ export function ListingDrawer({
                 </div>
               ) : null}
             </dl>
-
-            {points.length > 0 ? <PriceChart points={points} height={120} /> : null}
-
-            {itemTape.length > 0 ? (
-              <div className="item-tape">
-                <h3>Activity</h3>
-                <ul>
-                  {itemTape.map((row, i) => (
-                    <li key={`${row.kind}-${row.id}-${i}`}>
-                      <span>{activityKindLabel(row.kind)}</span>
-                      {row.price > 0 ? <PriceMark ugnot={row.price} size={13} /> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </div>
 
-          <div className="item-detail-cta">
-            {listed && mine ? (
-              <>
-                <p className="muted">You listed this item. A different wallet must buy it.</p>
-                {canInstant ? (
-                  <button
-                    className="btn primary btn-block"
-                    type="button"
-                    disabled={blocked || busy}
-                    onClick={() => onInstantSell?.(item.id)}
-                  >
-                    Instant Sell · <PriceMark ugnot={topOffer?.amount || 0} size={13} />
-                  </button>
-                ) : null}
-                {onSell ? (
-                  <button className="btn btn-block" type="button" onClick={() => onSell(item)}>
-                    Update price
-                  </button>
-                ) : null}
-                {onCancel ? (
-                  <button className="btn btn-block" type="button" disabled={blocked || busy} onClick={() => onCancel(item)}>
-                    Cancel listing
-                  </button>
-                ) : null}
-              </>
-            ) : listed ? (
-              connected ? (
-                <div className="item-cta-row">
-                <button
-                  className="btn primary"
-                  type="button"
-                  disabled={blocked || busy}
-                  onClick={() => onBuy(item)}
-                >
-                  Buy now
-                </button>
-                {canCart ? (
-                  <button className="btn" type="button" onClick={() => onCart?.(item)}>
-                    {inCart ? "In cart" : "Add to cart"}
-                  </button>
-                ) : null}
-                </div>
-              ) : (
-                <button className="btn primary btn-block" type="button" onClick={onConnect}>
-                  Connect Adena to buy
-                </button>
-              )
-            ) : owned && onSell ? (
-              <>
-                {canInstant ? (
-                  <button
-                    className="btn primary btn-block"
-                    type="button"
-                    disabled={blocked || busy}
-                    onClick={() => onInstantSell?.(item.id)}
-                  >
-                    Instant Sell · <PriceMark ugnot={topOffer?.amount || 0} size={13} />
-                  </button>
-                ) : null}
-                <button className="btn primary btn-block" type="button" onClick={() => onSell(item)}>
-                  Sell
-                </button>
-                {canPool ? (
-                  <button
-                    className="btn btn-block"
-                    type="button"
-                    disabled={blocked || busy}
-                    onClick={() => onDepositNft?.(item.id)}
-                  >
-                    Add to pool
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <p className="muted">
-                {preview ? "Connect on local gnodev to buy and sell this item." : "Not listed."}
-              </p>
-            )}
-            {canOffer ? (
-              <div className="drawer-offer">
-                {connected ? (
-                  <>
-                    <label>
-                      Offer (GNOT)
-                      <input
-                        inputMode="decimal"
-                        value={offerGnot}
-                        onChange={(e) => setOfferGnot(e.target.value)}
-                      />
-                    </label>
-                    <button
-                      className="btn btn-block"
-                      type="button"
-                      disabled={blocked || busy || !item.id || !onOffer}
-                      onClick={() => onOffer?.(item.id, ugnotFromGnot(offerGnot))}
-                    >
-                      Make offer
-                    </button>
-                  </>
-                ) : (
-                  <button className="btn btn-block" type="button" onClick={onConnect}>
-                    Connect Adena to offer
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
+          {points.length > 0 ? <PriceChart points={points} height={120} /> : null}
+
+          {itemTape.length > 0 ? (
+            <div className="item-tape item-details-card">
+              <h3>Activity</h3>
+              <ul>
+                {itemTape.map((row, i) => (
+                  <li key={`${row.kind}-${row.id}-${i}`}>
+                    <span>{activityKindLabel(row.kind)}</span>
+                    {row.price > 0 ? <PriceMark ugnot={row.price} size={13} /> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="properties">
+          <h3>Attributes</h3>
+          {item.revealed === false && (item.slot ?? -1) >= 0 ? (
+            <p className="hint">Hidden until the owner reveals.</p>
+          ) : shares.length > 0 ? (
+            <div className="properties-grid">
+              {shares.map((row) => {
+                const tier = rarityClass(row.value).match(/rarity-(common|uncommon|rare|epic|legendary|mythic)$/)?.[1] || "";
+                const freq = !tier && row.total > 0 ? traitRarityKind(row.pct) : "";
+                const kind = tier || freq;
+                return (
+                  <div className={`property${kind ? ` is-${kind}` : ""}`} key={`${row.type}:${row.value}`}>
+                    <span className="property-type">
+                      <span>{row.type}</span>
+                      {kind ? <em className="property-rare">{kind}</em> : null}
+                    </span>
+                    <span className={tier ? "property-value is-tier" : "property-value"}>{row.value}</span>
+                    {row.total > 0 ? (
+                      <span className="property-pct">
+                        {formatTraitPct(row.pct)} have this
+                        <span className="property-n">
+                          {row.count}/{row.total}
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="hint">No attributes on this item.</p>
+          )}
         </div>
       </aside>
     </div>

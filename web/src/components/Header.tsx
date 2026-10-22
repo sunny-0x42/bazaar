@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import { NETWORKS, parseCoinsUgnot, shortAddr, type Network } from "../lib/chain";
 import { hasAdena } from "../lib/wallets";
 import { PriceMark } from "./PriceMark";
 import { useQuote } from "./Quote";
 import { Select } from "./Select";
+import { activatePrimary, PRIMARY_NAV, primaryNavActive } from "./nav";
 import type { Tab } from "./types";
 
 type Props = {
@@ -15,19 +17,14 @@ type Props = {
   onExploreHome: () => void;
   onQuery: (q: string) => void;
   onConnect: () => void;
+  onDisconnect: () => void;
   network: Network;
   onNetwork: (id: string) => void;
   onProfile?: () => void;
   isAdmin?: boolean;
+  mintSlug?: string;
+  onOpenMint: (slug: string) => void;
 };
-
-const DESK_NAV: { id: Tab; label: string }[] = [
-  { id: "explore", label: "Explore" },
-  { id: "create", label: "Launch" },
-  { id: "guide", label: "Guide" },
-  { id: "sell", label: "Sell" },
-  { id: "portfolio", label: "Profile" },
-];
 
 export function Header({
   tab,
@@ -39,12 +36,15 @@ export function Header({
   onExploreHome,
   onQuery,
   onConnect,
+  onDisconnect,
   network,
   onNetwork,
   onProfile,
   isAdmin,
+  mintSlug = "",
+  onOpenMint,
 }: Props) {
-  const live = network.id === "pearl";
+  const live = network.id === "mainnet";
   const { quote, setQuote, gnotUsd } = useQuote();
   const ugnotBal = coins ? parseCoinsUgnot(coins) : null;
 
@@ -52,8 +52,8 @@ export function Header({
     <header className="site-header">
       <div className="header-inner">
         <button className="logo" type="button" onClick={onExploreHome}>
-          <span className="logo-mark" aria-hidden />
-          <span className="wordmark">Bazaar</span>
+          <img className="logo-mark" src="/bazaar-mark.svg" width={28} height={28} alt="" />
+          <span className="wordmark">Nomaq</span>
         </button>
 
         <label className="search">
@@ -64,7 +64,7 @@ export function Header({
           </svg>
           <input
             value={query}
-            placeholder="Search collections"
+            placeholder="Search collections and items"
             onFocus={onExploreHome}
             onChange={(e) => {
               onQuery(e.target.value);
@@ -74,23 +74,19 @@ export function Header({
         </label>
 
         <nav className="desk-nav" aria-label="Primary">
-          {DESK_NAV.map((item) => (
+          {PRIMARY_NAV.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={tab === item.id ? "active" : ""}
-              onClick={() => (item.id === "explore" ? onExploreHome() : onTab(item.id))}
+              className={primaryNavActive(item, tab, mintSlug) ? "active" : ""}
+              onClick={() => activatePrimary(item, { onTab, onExploreHome, onOpenMint })}
             >
               {item.label}
             </button>
           ))}
-          {isAdmin ? (
-            <button
-              type="button"
-              className={tab === "admin" ? "active" : ""}
-              onClick={() => onTab("admin")}
-            >
-              Admin
+          {network.id === "onyx" ? (
+            <button type="button" className={tab === "editions" ? "active" : ""} onClick={() => onTab("editions")}>
+              Editions
             </button>
           ) : null}
         </nav>
@@ -114,19 +110,44 @@ export function Header({
           </button>
         </div>
 
-        <div className={`status-pill net-select ${live ? "is-live" : "is-local"}`} title={live ? "Pearl testnet" : "Local gnodev"}>
+        <div
+          className={`status-pill net-select ${live ? "is-live" : "is-local"}`}
+          title={network.chainName + " (" + network.chainId + ")"}
+        >
           <span className="status-dot" aria-hidden />
-          <Select
-            ariaLabel="Network"
-            variant="pill"
-            value={network.id}
-            onChange={onNetwork}
-            options={NETWORKS.map((n) => ({
-              value: n.id,
-              label: n.id === "pearl" ? "Pearl" : "Local",
-            }))}
-          />
+          {NETWORKS.length > 1 ? (
+            <Select
+              ariaLabel="Network"
+              variant="pill"
+              value={network.id}
+              onChange={onNetwork}
+              options={NETWORKS.map((n) => ({
+                value: n.id,
+                label: n.id === "mainnet" ? "Mainnet" : n.id === "pearl" ? "Pearl" : "Local",
+              }))}
+            />
+          ) : (
+            <span>
+              {network.id === "onyx"
+                ? "Onyx"
+                : network.id === "pearl"
+                  ? "Pearl"
+                  : network.id === "local"
+                    ? "Local"
+                    : "Mainnet"}
+            </span>
+          )}
         </div>
+
+        {network.id === "onyx" ? (
+          <button
+            type="button"
+            className={`admin-nav ${tab === "editions" ? "active" : ""}`}
+            onClick={() => onTab("editions")}
+          >
+            Editions
+          </button>
+        ) : null}
 
         {isAdmin ? (
           <button
@@ -139,18 +160,15 @@ export function Header({
         ) : null}
 
         {connected && address ? (
-          <button className="wallet-chip" type="button" title={address} onClick={onProfile}>
-            <span className="wallet-dot" aria-hidden />
-            {ugnotBal != null && ugnotBal > 0 ? (
-              <span className="wallet-bal">
-                <PriceMark ugnot={ugnotBal} size={12} />
-              </span>
-            ) : null}
-            <span className="wallet-addr mono">{shortAddr(address)}</span>
-          </button>
+          <WalletMenu
+            address={address}
+            ugnotBal={ugnotBal}
+            onProfile={onProfile}
+            onDisconnect={onDisconnect}
+          />
         ) : hasAdena() ? (
           <button className="btn primary connect-btn" type="button" onClick={onConnect}>
-            Connect
+            Connect Adena
           </button>
         ) : (
           <a className="btn primary connect-btn" href="https://adena.app/" target="_blank" rel="noreferrer">
@@ -174,5 +192,101 @@ export function Header({
         </div>
       </div>
     </header>
+  );
+}
+
+function WalletMenu({
+  address,
+  ugnotBal,
+  onProfile,
+  onDisconnect,
+}: {
+  address: string;
+  ugnotBal: number | null;
+  onProfile?: () => void;
+  onDisconnect: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  async function copyAddr() {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="wallet-menu" ref={root}>
+      <button
+        className="wallet-chip"
+        type="button"
+        title={address}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="wallet-dot" aria-hidden />
+        {ugnotBal != null && ugnotBal > 0 ? (
+          <span className="wallet-bal">
+            <PriceMark ugnot={ugnotBal} size={12} />
+          </span>
+        ) : null}
+        <span className="wallet-addr mono">{shortAddr(address)}</span>
+        <span className="wallet-caret" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div className="wallet-pop" role="menu">
+          {onProfile ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onProfile();
+                setOpen(false);
+              }}
+            >
+              Profile
+            </button>
+          ) : null}
+          <button type="button" role="menuitem" onClick={() => void copyAddr()}>
+            {copied ? "Copied" : "Copy address"}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="is-danger"
+            onClick={() => {
+              setOpen(false);
+              onDisconnect();
+            }}
+          >
+            Disconnect
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -2,6 +2,7 @@ package factory
 
 import (
 	"chain"
+	"chain/banker"
 	"strings"
 	"testing"
 
@@ -12,13 +13,18 @@ import (
 func resetAll() {
 	bySlug = avl.Tree{}
 	byPkg = avl.Tree{}
-	pending = avl.Tree{}
 	reserved = avl.Tree{}
 	inited = false
 	launchFee = 0
-	seenBank = 0
+	protocolBps = 0
 	var zero address
 	admin = zero
+	protocolSink = zero
+	genesisPkg = ""
+	genesisShareBps = 0
+	discountPusher = ""
+	genesisSink = zero
+	holderDisc = avl.Tree{}
 	self = zero
 }
 
@@ -32,6 +38,12 @@ func TestInit(cur realm, t *testing.T) {
 	}
 	if LaunchFee() != defaultLaunchFee {
 		t.Fatalf("launch fee %d", LaunchFee())
+	}
+	if ProtocolBps() != defaultProtocolBps {
+		t.Fatalf("protocol bps %d", ProtocolBps())
+	}
+	if ProtocolSink() != alice {
+		t.Fatalf("sink %s", ProtocolSink().String())
 	}
 	if Address() == alice {
 		t.Fatalf("factory address")
@@ -71,6 +83,81 @@ func TestSetLaunchFee(cur realm, t *testing.T) {
 	}
 }
 
+func TestSetProtocolBps(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Init(cross(cur))
+	if ProtocolBps() != 200 {
+		t.Fatalf("default %d", ProtocolBps())
+	}
+	SetProtocolBps(cross(cur), 100)
+	if ProtocolBps() != 100 {
+		t.Fatalf("set %d", ProtocolBps())
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	got := revive(func() { SetProtocolBps(cross(cur), 50) })
+	if got == nil {
+		t.Fatalf("expected not admin")
+	}
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
+	got = revive(func() { SetProtocolBps(cross(cur), 50) })
+	if got == nil {
+		t.Fatalf("expected EOA")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got = revive(func() { SetProtocolBps(cross(cur), -1) })
+	if got == nil {
+		t.Fatalf("expected bps")
+	}
+	got = revive(func() { SetProtocolBps(cross(cur), 501) })
+	if got == nil {
+		t.Fatalf("expected cap")
+	}
+	if ProtocolBps() != 100 {
+		t.Fatalf("mutated %d", ProtocolBps())
+	}
+}
+
+func TestSetProtocolSink(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Init(cross(cur))
+	if ProtocolSink() != alice {
+		t.Fatalf("init sink")
+	}
+	SetProtocolSink(cross(cur), bob)
+	if ProtocolSink() != bob {
+		t.Fatalf("set %s", ProtocolSink().String())
+	}
+	got := revive(func() { SetProtocolSink(cross(cur), bob) })
+	if got == nil {
+		t.Fatalf("expected already sink")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	got = revive(func() { SetProtocolSink(cross(cur), alice) })
+	if got == nil {
+		t.Fatalf("expected not admin")
+	}
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
+	got = revive(func() { SetProtocolSink(cross(cur), alice) })
+	if got == nil {
+		t.Fatalf("expected EOA")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	var zero address
+	got = revive(func() { SetProtocolSink(cross(cur), zero) })
+	if got == nil {
+		t.Fatalf("expected invalid")
+	}
+	if ProtocolSink() != bob {
+		t.Fatalf("mutated")
+	}
+}
+
 func TestRegisterHappy(cur realm, t *testing.T) {
 	resetAll()
 	alice := testutils.TestAddress("alice")
@@ -78,7 +165,6 @@ func TestRegisterHappy(cur realm, t *testing.T) {
 	Init(cross(cur))
 	SetLaunchFee(cross(cur), 0)
 	pkg := "gno.land/r/bazaar/c/demo"
-	pending.Set(pkg, true)
 	register(pkg, alice, "Demo", "demo", "/samples/demo.png", 10, 1_000_000, 250)
 	if CollectionOf("demo") != pkg {
 		t.Fatalf("CollectionOf %q", CollectionOf("demo"))
@@ -103,8 +189,8 @@ func TestRegisterFromCollectionRealm(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Init(cross(cur))
 	SetLaunchFee(cross(cur), 0)
+	Reserve(cross(cur), "demo")
 	testing.SetRealm(testing.NewCodeRealm("gno.land/r/bazaar/c/demo"))
-	CreditLaunchFee(cross(cur))
 	got := revive(func() { Register(cross(cur), "Demo", "demo", "", 0, 0, 0) })
 	if got == nil {
 		t.Fatalf("expected EOA creator: NewCodeRealm Previous is not the launching EOA")
@@ -144,31 +230,16 @@ func TestRegisterDuplicate(cur realm, t *testing.T) {
 	}
 }
 
-func TestCreditLaunchFeeBank(cur realm, t *testing.T) {
-	resetAll()
-	alice := testutils.TestAddress("alice")
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Init(cross(cur))
-	SetLaunchFee(cross(cur), 100)
-	testing.IssueCoins(Address(), chain.Coins{{Denom: "ugnot", Amount: 100}})
-	testing.SetRealm(testing.NewCodeRealm("gno.land/r/bazaar/c/demo"))
-	CreditLaunchFee(cross(cur))
-	testing.SetRealm(testing.NewCodeRealm("gno.land/r/bazaar/c/other"))
-	got := revive(func() { CreditLaunchFee(cross(cur)) })
-	if got == nil {
-		t.Fatalf("expected launch fee on zero delta")
-	}
-}
-
-func TestCreditLaunchFeeNotRealm(cur realm, t *testing.T) {
+func TestRegisterRequiresReserve(cur realm, t *testing.T) {
 	resetAll()
 	alice := testutils.TestAddress("alice")
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Init(cross(cur))
 	SetLaunchFee(cross(cur), 0)
-	got := revive(func() { CreditLaunchFee(cross(cur)) })
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/bazaar/c/demo"))
+	got := revive(func() { Register(cross(cur), "Demo", "demo", "", 0, 0, 0) })
 	if got == nil {
-		t.Fatalf("expected collection realm")
+		t.Fatalf("expected not reserved")
 	}
 }
 
@@ -272,8 +343,7 @@ func TestReserve(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Init(cross(cur))
 	SetLaunchFee(cross(cur), 1_000_000)
-	testing.IssueCoins(Address(), chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
-	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	testing.SetOriginSend(nil)
 	Reserve(cross(cur), "foam")
 	if ReservedCreator("foam") != alice.String() {
 		t.Fatalf("reserved %q", ReservedCreator("foam"))
@@ -291,5 +361,118 @@ func TestReserve(cur realm, t *testing.T) {
 	CancelReserve(cross(cur), "foam")
 	if ReservedCreator("foam") != "" {
 		t.Fatalf("cleared")
+	}
+}
+
+func TestCancelReservePaysLocked(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Init(cross(cur))
+	SetLaunchFee(cross(cur), 1_000_000)
+	testing.IssueCoins(self, chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	testing.SetRealm(testing.NewUserRealm(bob))
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	Reserve(cross(cur), "foam")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SetLaunchFee(cross(cur), 0)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	CancelReserve(cross(cur), "foam")
+	if ReservedCreator("foam") != "" {
+		t.Fatalf("cleared")
+	}
+	bk := banker.NewReadonlyBanker()
+	if bk.GetCoins(self).AmountOf("ugnot") != 0 {
+		t.Fatalf("locked fee not refunded")
+	}
+}
+
+func TestWithdrawLeavesReserve(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Init(cross(cur))
+	SetLaunchFee(cross(cur), 1_000_000)
+	testing.IssueCoins(self, chain.Coins{{Denom: "ugnot", Amount: 3_000_000}})
+	testing.SetRealm(testing.NewUserRealm(bob))
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	Reserve(cross(cur), "foam")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Withdraw(cross(cur))
+	if ReservedCreator("foam") != bob.String() {
+		t.Fatalf("reserve dropped")
+	}
+	bk := banker.NewReadonlyBanker()
+	if bk.GetCoins(self).AmountOf("ugnot") != 1_000_000 {
+		t.Fatalf("locked %d", bk.GetCoins(self).AmountOf("ugnot"))
+	}
+	got := revive(func() { Withdraw(cross(cur)) })
+	if got == nil {
+		t.Fatalf("expected no funds over reserve")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	CancelReserve(cross(cur), "foam")
+}
+
+func TestAdminReserveFree(cur realm, t *testing.T) {
+	resetAll()
+	alice := testutils.TestAddress("alice")
+	bob := testutils.TestAddress("bob")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Init(cross(cur))
+	SetLaunchFee(cross(cur), 1_000_000)
+	if ReserveDue(alice.String()) != 0 {
+		t.Fatalf("admin due %d", ReserveDue(alice.String()))
+	}
+	if ReserveDue(bob.String()) != 1_000_000 {
+		t.Fatalf("bob due %d", ReserveDue(bob.String()))
+	}
+	if ReserveDue("") != 1_000_000 {
+		t.Fatalf("empty due")
+	}
+	if ReserveDue("not-an-address") != 1_000_000 {
+		t.Fatalf("bad due")
+	}
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/evil"))
+	got := revive(func() { Reserve(cross(cur), "evil") })
+	if got == nil {
+		t.Fatalf("expected eoa")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetOriginSend(nil)
+	Reserve(cross(cur), "free")
+	CancelReserve(cross(cur), "free")
+	if ReservedCreator("free") != "" {
+		t.Fatalf("admin cancel")
+	}
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	got = revive(func() { Reserve(cross(cur), "paid") })
+	if got == nil {
+		t.Fatalf("expected admin empty send")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	testing.SetOriginSend(nil)
+	got = revive(func() { Reserve(cross(cur), "bob") })
+	if got == nil {
+		t.Fatalf("expected bob payment")
+	}
+	testing.IssueCoins(self, chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 1_000_000}})
+	Reserve(cross(cur), "bob")
+	if ReservedCreator("bob") != bob.String() {
+		t.Fatalf("bob reserved")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	TransferAdmin(cross(cur), bob)
+	if ReserveDue(alice.String()) != 1_000_000 || ReserveDue(bob.String()) != 0 {
+		t.Fatalf("due after transfer")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	testing.SetOriginSend(nil)
+	Reserve(cross(cur), "next")
+	if ReservedCreator("next") != bob.String() {
+		t.Fatalf("new admin")
 	}
 }

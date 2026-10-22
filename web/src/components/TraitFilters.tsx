@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { traitGroups, type Item } from "../lib/chain";
+import { rarityClass, traitGroups, type Item } from "../lib/chain";
 
 type Props = {
   items: Item[];
@@ -76,6 +76,7 @@ export function TraitFilters({
               <ul>
                 {g.values.map((row) => {
                   const on = picked.includes(row.value);
+                  const tone = rarityClass(row.value);
                   return (
                     <li key={row.value}>
                       <label className="trait-check">
@@ -84,7 +85,7 @@ export function TraitFilters({
                           checked={on}
                           onChange={() => onToggle(g.type, row.value)}
                         />
-                        <span>{row.value}</span>
+                        <span className={tone.includes("rarity-") ? tone : undefined}>{row.value}</span>
                         <span className="muted">{row.count}</span>
                       </label>
                     </li>

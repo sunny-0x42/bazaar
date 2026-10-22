@@ -1,6 +1,6 @@
 /** OpenSea-style metadata → AddDropItems blob (name|image|rarity|Trait:Value;...). */
 
-import { ipfsToHttp, isIpfsUri } from "./chain";
+import { formatUtcMinute, ipfsToHttp, isIpfsUri, parseUtcMinute } from "./chain";
 
 function asUrl(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -88,7 +88,58 @@ export type LaunchPackMeta = {
   mintPrice?: string;
   royaltyPct?: string;
   hideUntilReveal?: boolean;
+  prereveal?: string;
+  /** Allowlist price in GNOT. `0` is free. Omitted means the pack did not set one. */
+  wlPrice?: string;
+  /** Allowlist-stage quantity from pack.whitelist.cap. */
+  wlQty?: string;
+  /** `YYYY-MM-DD HH:MM` UTC from pack.whitelist.opensAt or opensUtc. */
+  wlStart?: string;
+  /** `YYYY-MM-DD HH:MM` UTC. Empty end stays open. */
+  wlEnd?: string;
+  /** `YYYY-MM-DD HH:MM` UTC. Required once a whitelist start is set. */
+  publicStart?: string;
+  /** `YYYY-MM-DD HH:MM` UTC. Empty end stays open. */
+  publicEnd?: string;
 };
+
+function utcMinuteField(raw: unknown): string {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return formatUtcMinute(Math.floor(raw)).replace(/ UTC$/, "");
+  }
+  if (typeof raw !== "string" || !raw.trim()) return "";
+  const minute = raw.trim().replace("T", " ").replace(/Z$/, "").slice(0, 16);
+  return parseUtcMinute(minute) != null ? minute : "";
+}
+
+function gnotField(raw: unknown): string {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return String(raw);
+  if (typeof raw !== "string") return "";
+  const text = raw.trim();
+  if (!text) return "";
+  const n = Number(text);
+  return Number.isFinite(n) && n >= 0 ? text : "";
+}
+
+function whitelistPack(raw: unknown): Pick<LaunchPackMeta, "wlPrice" | "wlQty" | "wlStart" | "wlEnd" | "publicStart" | "publicEnd"> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const rec = raw as Record<string, unknown>;
+  const cap = Number(rec.cap);
+  const wlQty = Number.isFinite(cap) && cap > 0 ? String(Math.floor(cap)) : undefined;
+  const wlStart = utcMinuteField(rec.opensUtc) || utcMinuteField(rec.opensAt);
+  const wlEnd = utcMinuteField(rec.endsUtc) || utcMinuteField(rec.endsAt);
+  const publicStart = utcMinuteField(rec.publicStartUtc) || utcMinuteField(rec.publicStartAt) || utcMinuteField(rec.publicStart);
+  const publicEnd = utcMinuteField(rec.publicEndUtc) || utcMinuteField(rec.publicEndAt) || utcMinuteField(rec.publicEnd);
+  const wlPrice = gnotField(rec.price ?? rec.priceGnot);
+  return {
+    wlPrice: wlPrice || undefined,
+    wlQty,
+    wlStart: wlStart || undefined,
+    wlEnd: wlEnd || undefined,
+    publicStart: publicStart || undefined,
+    publicEnd: publicEnd || undefined,
+  };
+}
 
 export function applyLaunchPack(raw: string): LaunchPackMeta {
   try {
@@ -109,6 +160,8 @@ export function applyLaunchPack(raw: string): LaunchPackMeta {
       mintPrice: str("mintPrice") || undefined,
       royaltyPct: str("royaltyPct") || undefined,
       hideUntilReveal: typeof hide === "boolean" ? hide : undefined,
+      prereveal: str("prereveal") || undefined,
+      ...whitelistPack(rec.whitelist),
     };
   } catch {
     return {};

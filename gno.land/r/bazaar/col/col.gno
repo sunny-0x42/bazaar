@@ -1,14 +1,20 @@
 package col
 
+// Mainnet factory template: genesis p/nt/grc721 so Adena indexes NewToken/Transfer,
+// plus List/Buy escrow on this realm. Listed OwnerOf is the collection (wallet hides
+// the token until Cancel or Buy). Do not import p/bazaar/grc721 here.
+
 import (
 	"chain"
 	"chain/banker"
 	"chain/runtime/unsafe"
+	"errors"
 	"strconv"
 	"strings"
+	"time"
 
-	"gno.land/p/bazaar/grc721/v0"
-	"gno.land/p/bazaar/grc721/metadata/v0"
+	"gno.land/p/nt/grc721/metadata/v0"
+	"gno.land/p/nt/grc721/v0"
 	"gno.land/p/nt/avl/v0"
 	"gno.land/p/nt/seqid/v0"
 	"gno.land/r/bazaar/factory"
@@ -23,6 +29,7 @@ const (
 	publicOrigin    = "https://bazaar-gno.vercel.app"
 	dropAddCap      = 20
 	dropSlotHardCap = 10000
+	allowAddCap     = 50
 	minSlugLen      = 2
 )
 
@@ -47,9 +54,16 @@ type dropSlot struct {
 	traits string
 }
 
+type phaseCount struct {
+	wl  int
+	pub int
+}
+
 var (
 	items      avl.Tree
 	dropSlots  avl.Tree
+	allowlist  avl.Tree
+	mintedBy   avl.Tree
 	token      *grc721.Token
 	ledger     *grc721.PrivateLedger
 	metaView   *metadata.Metadata
@@ -58,16 +72,29 @@ var (
 	nextID     int
 	minted     int
 	loaded     int
+	allowN     int
+	mintCap    int
+	wlMintCap  int
+	pubMintCap int
 	maxSupply  int
 	mintPrice  int64
-	royaltyBps int
+	wlPrice     int64
+	wlSupply    int
+	wlStart      int64
+	wlEnd        int64
+	publicStart  int64
+	publicEnd    int64
+	publicForced bool
+	royaltyBps   int
 	paused     bool
+	hidden     bool
 	inited     bool
 	creator    address
 	self       address
 	colName    string
 	colSymbol  string
 	colCover   string
+	prereveal  string
 	slug       string
 )
 
@@ -105,7 +132,10 @@ func Init(cur realm, name, symbol, cover string, maxSupplyN int, mintPriceUgnot 
 	}
 	slug = pathSlug
 	reservedWho := factory.ReservedCreator(slug)
-	takeLaunchFee(cur)
+	if reservedWho == "" || reservedWho != cur.Previous().Address().String() {
+		panic("col: reserve first")
+	}
+	takeExact(0)
 	tok, led := grc721.NewToken(name, symbol, tokenSeq.Next(), cur)
 	token = tok
 	ledger = led
@@ -115,16 +145,29 @@ func Init(cur realm, name, symbol, cover string, maxSupplyN int, mintPriceUgnot 
 	colName = name
 	colSymbol = symbol
 	colCover = cover
+	prereveal = ""
 	maxSupply = maxSupplyN
 	mintPrice = mintPriceUgnot
 	royaltyBps = int(royalty)
 	items = avl.Tree{}
 	dropSlots = avl.Tree{}
+	allowlist = avl.Tree{}
+	mintedBy = avl.Tree{}
 	loaded = 0
+	allowN = 0
+	mintCap = 0
+	wlMintCap = 0
+	pubMintCap = 0
+	wlPrice = 0
+	wlSupply = 0
+	wlStart = 0
+	wlEnd = 0
+	publicStart = 0
+	publicEnd = 0
+	publicForced = false
+	hidden = false
+	paused = maxSupplyN > 0
 	inited = true
-	if reservedWho == "" {
-		factory.CreditLaunchFee(cross(cur))
-	}
 	factory.Register(cross(cur), name, symbol, cover, maxSupplyN, mintPriceUgnot, royalty)
 	chain.Emit("Init", "creator", creator.String(), "slug", slug)
 }
@@ -142,7 +185,22 @@ func Mint(cur realm, name, imageURL string) int {
 
 func PublicMint(cur realm) int {
 	caller := requireUser(cur)
-	takeExact(mintPrice)
+	if paused {
+		panic("col: paused")
+	}
+	if mintPhase(time.Now().Unix()) == "closed" {
+		panic("col: not open")
+	}
+	requireAllow(caller)
+	checkMintCap(caller)
+	if maxSupply > 0 && loaded == 0 {
+		panic("col: no slot")
+	}
+	pay := mintPrice
+	if wlPhase() {
+		pay = wlPrice
+	}
+	takeExact(pay)
 	name := colName + " #" + strconv.Itoa(minted+1)
 	image := publicImage()
 	var slot *dropSlot
@@ -156,18 +214,31 @@ func PublicMint(cur realm) int {
 			panic("col: no slot")
 		}
 		slot = v.(*dropSlot)
-		name = slot.name
-		image = slot.image
 		slotIndex = minted
+		if hidden {
+			name = "Unrevealed"
+			image = prerevealImage()
+		} else {
+			name = slot.name
+			image = slot.image
+		}
 	}
 	id := mintTo(cur, caller, name, image)
 	if slot != nil {
-		applySlot(id, slot, slotIndex)
+		if hidden {
+			it := mustItem(id)
+			it.revealed = false
+			it.slot = slotIndex
+			items.Set(itemKey(id), it)
+		} else {
+			applySlot(id, slot, slotIndex)
+		}
 	}
 	writeTokenMeta(id)
-	if mintPrice > 0 {
+	noteMint(caller)
+	if pay > 0 {
 		bk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
-		bk.SendCoins(self, creator, chain.Coins{{Denom: nativeDenom, Amount: mintPrice}})
+		bk.SendCoins(self, creator, chain.Coins{{Denom: nativeDenom, Amount: pay}})
 	}
 	chain.Emit("PublicMint", "id", strconv.Itoa(id), "n", strconv.Itoa(minted))
 	return id
@@ -207,6 +278,9 @@ func AddDropItems(cur realm, blob string) {
 
 func ListDropSlots() string {
 	requireInit()
+	if hidden {
+		return ""
+	}
 	out := ""
 	for i := 0; i < loaded; i++ {
 		v := dropSlots.Get(slotKey(i))
@@ -241,12 +315,415 @@ func ResumeMint(cur realm) {
 	if caller != creator {
 		panic("col: not creator")
 	}
+	if maxSupply > 0 && loaded < 1 {
+		panic("col: no slot")
+	}
 	paused = false
 	chain.Emit("ResumeMint", "slug", slug)
 }
 
-func OwnerOf(id int) address {
-	return mustItem(id).owner
+func AddAllowlist(cur realm, blob string) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	lines := splitDropLines(blob)
+	if len(lines) < 1 || len(lines) > allowAddCap {
+		panic("col: allowlist")
+	}
+	for _, line := range lines {
+		who := strings.ToLower(strings.TrimSpace(line))
+		if !validG1(who) {
+			panic("col: address")
+		}
+		if allowlist.Get(who) != nil {
+			continue
+		}
+		allowlist.Set(who, true)
+		allowN++
+	}
+	chain.Emit("AddAllowlist", "n", strconv.Itoa(allowN))
+}
+
+func AllowN() int {
+	requireInit()
+	return allowN
+}
+
+func OnAllowlist(addr string) bool {
+	requireInit()
+	who := strings.ToLower(strings.TrimSpace(addr))
+	return allowlist.Get(who) != nil
+}
+
+func SetDropSale(cur realm, wlPriceUgnot int64, wlQty int) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	if minted > 0 {
+		panic("col: minted")
+	}
+	if wlPriceUgnot < 0 {
+		panic("col: wlPrice")
+	}
+	if wlQty < 0 {
+		panic("col: wlSupply")
+	}
+	if maxSupply > 0 && wlQty > maxSupply {
+		panic("col: wlSupply")
+	}
+	wlPrice = wlPriceUgnot
+	wlSupply = wlQty
+	chain.Emit("SetDropSale", "wlSupply", strconv.Itoa(wlQty))
+}
+
+func StartPublic(cur realm) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	if wlSupply <= 0 || minted >= wlSupply {
+		panic("col: public")
+	}
+	publicForced = true
+	wlSupply = minted
+	now := time.Now().Unix()
+	if wlStart > now {
+		wlStart = now
+	}
+	if publicStart > now {
+		publicStart = now
+	}
+	if publicEnd > 0 && publicEnd <= now {
+		publicEnd = 0
+	}
+	chain.Emit("StartPublic", "minted", strconv.Itoa(minted))
+}
+
+// SetMintSchedule sets unix-second bounds for both rounds. 0,0,0,0 clears the clock.
+// An end of 0 means that round has no hard close. wlStart > 0 requires publicStart > wlStart.
+// A set end must be after its own start. publicStart must not fall inside the whitelist window.
+// Locked once any token has minted.
+func SetMintSchedule(cur realm, wlStartUnix, wlEndUnix, publicStartUnix, publicEndUnix int64) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	if minted > 0 {
+		panic("col: minted")
+	}
+	if wlStartUnix < 0 || wlEndUnix < 0 || publicStartUnix < 0 || publicEndUnix < 0 {
+		panic("col: schedule")
+	}
+	if wlStartUnix == 0 && wlEndUnix == 0 && publicStartUnix == 0 && publicEndUnix == 0 {
+		wlStart = 0
+		wlEnd = 0
+		publicStart = 0
+		publicEnd = 0
+		chain.Emit("SetMintSchedule", "wlStart", "0", "wlEnd", "0", "publicStart", "0", "publicEnd", "0")
+		return
+	}
+	if wlStartUnix > 0 && publicStartUnix <= wlStartUnix {
+		panic("col: schedule")
+	}
+	if wlEndUnix > 0 && (wlStartUnix == 0 || wlEndUnix <= wlStartUnix) {
+		panic("col: schedule")
+	}
+	if publicEndUnix > 0 && (publicStartUnix == 0 || publicEndUnix <= publicStartUnix) {
+		panic("col: schedule")
+	}
+	if wlEndUnix > 0 && publicStartUnix > 0 && publicStartUnix < wlEndUnix {
+		panic("col: schedule")
+	}
+	wlStart = wlStartUnix
+	wlEnd = wlEndUnix
+	publicStart = publicStartUnix
+	publicEnd = publicEndUnix
+	chain.Emit(
+		"SetMintSchedule",
+		"wlStart", strconv.FormatInt(wlStartUnix, 10),
+		"wlEnd", strconv.FormatInt(wlEndUnix, 10),
+		"publicStart", strconv.FormatInt(publicStartUnix, 10),
+		"publicEnd", strconv.FormatInt(publicEndUnix, 10),
+	)
+}
+
+func MintScheduleOf() string {
+	requireInit()
+	return strconv.FormatInt(wlStart, 10) + "|" + strconv.FormatInt(wlEnd, 10) + "|" + strconv.FormatInt(publicStart, 10) + "|" + strconv.FormatInt(publicEnd, 10)
+}
+
+func SetMintCap(cur realm, n int) {
+	if n < 0 {
+		panic("col: mintCap")
+	}
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	mintCap = n
+	chain.Emit("SetMintCap", "cap", strconv.Itoa(n))
+}
+
+// SetPhaseMintCap sets how many times one wallet may PublicMint in each round.
+// 0 means that round has no per-wallet limit. Counts are separate: a whitelist
+// mint does not consume the public allowance. mintCap still caps the total.
+func SetPhaseMintCap(cur realm, wlN, pubN int) {
+	if wlN < 0 || pubN < 0 {
+		panic("col: phase cap")
+	}
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	wlMintCap = wlN
+	pubMintCap = pubN
+	chain.Emit("SetPhaseMintCap", "wl", strconv.Itoa(wlN), "public", strconv.Itoa(pubN))
+}
+
+func SetMintPrice(cur realm, priceUgnot int64) {
+	if priceUgnot < 0 {
+		panic("col: price")
+	}
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	mintPrice = priceUgnot
+	chain.Emit("SetMintPrice", "price", strconv.FormatInt(priceUgnot, 10))
+}
+
+func MintCapOf() int {
+	requireInit()
+	return mintCap
+}
+
+func PhaseMintCapOf() string {
+	requireInit()
+	return strconv.Itoa(wlMintCap) + "|" + strconv.Itoa(pubMintCap)
+}
+
+func DropSaleOf() string {
+	requireInit()
+	return strconv.Itoa(royaltyBps) + "|" + strconv.FormatInt(wlPrice, 10) + "|" + strconv.Itoa(wlSupply) + "|" + mintPhase(time.Now().Unix()) + "|" + strconv.FormatInt(mintPrice, 10)
+}
+
+func wlPhase() bool {
+	return mintPhase(time.Now().Unix()) == "whitelist"
+}
+
+// mintPhase is closed, whitelist, or public. A future publicStart does not
+// fall through to public price when the allowlist quantity is already used.
+// After wlEnd, and after publicEnd, the sale is closed until the next open bound.
+func mintPhase(now int64) string {
+	if publicForced {
+		if publicEnd > 0 && now >= publicEnd {
+			return "closed"
+		}
+		return "public"
+	}
+	if wlStart > 0 && now < wlStart {
+		return "closed"
+	}
+	if publicStart > 0 && now >= publicStart {
+		if publicEnd > 0 && now >= publicEnd {
+			return "closed"
+		}
+		return "public"
+	}
+	if publicStart > 0 && now < publicStart {
+		if wlEnd > 0 && now >= wlEnd {
+			return "closed"
+		}
+		if wlSupply > 0 && minted < wlSupply {
+			return "whitelist"
+		}
+		return "closed"
+	}
+	if wlEnd > 0 && now >= wlEnd {
+		return "public"
+	}
+	if wlSupply > 0 && minted < wlSupply {
+		return "whitelist"
+	}
+	return "public"
+}
+
+func requireAllow(caller address) {
+	if publicForced {
+		return
+	}
+	who := strings.ToLower(caller.String())
+	if wlPhase() {
+		if allowN <= 0 {
+			panic("col: allowlist")
+		}
+		if allowlist.Get(who) == nil {
+			panic("col: not allowed")
+		}
+		return
+	}
+	if wlSupply > 0 {
+		return
+	}
+	if allowN <= 0 {
+		return
+	}
+	if allowlist.Get(who) == nil {
+		panic("col: not allowed")
+	}
+}
+
+func walletPhase(who string) phaseCount {
+	if v := mintedBy.Get(who); v != nil {
+		return v.(phaseCount)
+	}
+	return phaseCount{}
+}
+
+func checkMintCap(caller address) {
+	who := strings.ToLower(caller.String())
+	got := walletPhase(who)
+	if mintCap > 0 && got.wl+got.pub >= mintCap {
+		panic("col: mint cap")
+	}
+	if wlPhase() {
+		if wlMintCap > 0 && got.wl >= wlMintCap {
+			panic("col: wl mint cap")
+		}
+		return
+	}
+	if pubMintCap > 0 && got.pub >= pubMintCap {
+		panic("col: public mint cap")
+	}
+}
+
+func noteMint(caller address) {
+	who := strings.ToLower(caller.String())
+	got := walletPhase(who)
+	if wlPhase() {
+		got.wl++
+	} else {
+		got.pub++
+	}
+	mintedBy.Set(who, got)
+}
+
+func Hidden() bool {
+	requireInit()
+	return hidden
+}
+
+func SetHidden(cur realm, hide bool) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	if !hide {
+		panic("col: reveal")
+	}
+	if loaded < 1 {
+		panic("col: no slots")
+	}
+	if !hidden && minted > 0 {
+		panic("col: revealed")
+	}
+	hidden = true
+	chain.Emit("SetHidden", "hidden", "true")
+}
+
+// SetPrereveal is the image every sealed NFT shows. Empty uses the cover.
+// Creator only. After RevealCollection the real slot image is already public.
+func SetPrereveal(cur realm, image string) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	image = strings.TrimSpace(image)
+	if image != "" && !validImage(image) {
+		panic("col: image")
+	}
+	if !hidden && minted > 0 {
+		panic("col: revealed")
+	}
+	prereveal = image
+	if hidden {
+		paintSealed(prerevealImage())
+	}
+	chain.Emit("SetPrereveal", "image", image)
+}
+
+func Prereveal() string {
+	requireInit()
+	return prereveal
+}
+
+// RevealCollection opens every minted NFT. Creator only, and only while sealed.
+func RevealCollection(cur realm) {
+	caller := requireUser(cur)
+	if caller != creator {
+		panic("col: not creator")
+	}
+	if !hidden {
+		panic("col: revealed")
+	}
+	if loaded < 1 {
+		panic("col: no slots")
+	}
+	hidden = false
+	for _, id := range sealedIDs() {
+		it := mustItem(id)
+		v := dropSlots.Get(slotKey(it.slot))
+		if v == nil {
+			panic("col: no slot")
+		}
+		applySlot(id, v.(*dropSlot), it.slot)
+		writeTokenMeta(id)
+	}
+	chain.Emit("RevealCollection", "slug", slug)
+}
+
+func Revealed(id int) bool {
+	return mustItem(id).revealed
+}
+
+func Reveal(cur realm, id int) {
+	caller := requireUser(cur)
+	it := mustItem(id)
+	if caller != it.owner {
+		panic("col: not owner")
+	}
+	if hidden {
+		panic("col: sealed")
+	}
+	if it.revealed {
+		panic("col: revealed")
+	}
+	if it.slot < 0 {
+		panic("col: no slot")
+	}
+	v := dropSlots.Get(slotKey(it.slot))
+	if v == nil {
+		panic("col: no slot")
+	}
+	applySlot(id, v.(*dropSlot), it.slot)
+	writeTokenMeta(id)
+	chain.Emit("Reveal", "id", strconv.Itoa(id))
+}
+
+// Adena IIFE: owner, err := OwnerOf("1"); owner.String() == wallet
+func OwnerOf(tid string) (address, error) {
+	requireInit()
+	id, err := strconv.Atoi(tid)
+	if err != nil || id < 1 {
+		return address(""), errors.New("col: tid")
+	}
+	v := items.Get(itemKey(id))
+	if v == nil {
+		return address(""), errors.New("col: unknown item")
+	}
+	return v.(*item).owner, nil
 }
 
 func GrcName() string {
@@ -293,7 +770,8 @@ func BalanceOf(addr string) int64 {
 	return GrcBalanceOf(addr)
 }
 
-func TokenURI(id int) string {
+func TokenURI(tid string) string {
+	id := parseTid(tid)
 	mustItem(id)
 	if metaView != nil {
 		u, err := metaView.TokenURI(itemTid(id))
@@ -310,8 +788,9 @@ func guardUnlisted(id int) {
 	}
 }
 
-func Approve(cur realm, to string, id int) {
+func Approve(cur realm, to, tid string) {
 	caller := requireUser(cur)
+	id := parseTid(tid)
 	guardUnlisted(id)
 	who := address(to)
 	if to != "" && !who.IsValid() {
@@ -333,8 +812,9 @@ func SetApprovalForAll(cur realm, operator string, approved bool) {
 	}
 }
 
-func TransferFrom(cur realm, from, to string, id int) {
+func TransferFrom(cur realm, from, to, tid string) {
 	caller := requireUser(cur)
+	id := parseTid(tid)
 	guardUnlisted(id)
 	src := address(from)
 	dst := address(to)
@@ -382,11 +862,19 @@ func PriceOf(id int) int64 {
 }
 
 func NameOf(id int) string {
-	return mustItem(id).name
+	it := mustItem(id)
+	if !it.revealed {
+		return "Unrevealed"
+	}
+	return it.name
 }
 
 func ImageOf(id int) string {
-	return mustItem(id).image
+	it := mustItem(id)
+	if !it.revealed {
+		return prerevealImage()
+	}
+	return it.image
 }
 
 func Listed(id int) bool {
@@ -404,7 +892,17 @@ func CollectionOf(_ int) string {
 
 func ItemLine(id int) string {
 	it := mustItem(id)
-	return strconv.Itoa(it.id) + "|" + it.name + "|" + it.owner.String() + "|" + it.seller.String() + "|" + strconv.FormatInt(it.price, 10) + "|" + strconv.FormatBool(it.listed) + "|" + it.image + "|" + slug + "|" + it.rarity + "|" + it.traits + "|" + strconv.FormatBool(it.revealed) + "|" + strconv.Itoa(it.slot)
+	name := it.name
+	image := it.image
+	rarity := it.rarity
+	traits := it.traits
+	if !it.revealed {
+		name = "Unrevealed"
+		image = prerevealImage()
+		rarity = ""
+		traits = ""
+	}
+	return strconv.Itoa(it.id) + "|" + name + "|" + it.owner.String() + "|" + it.seller.String() + "|" + strconv.FormatInt(it.price, 10) + "|" + strconv.FormatBool(it.listed) + "|" + image + "|" + slug + "|" + rarity + "|" + traits + "|" + strconv.FormatBool(it.revealed) + "|" + strconv.Itoa(it.slot)
 }
 
 func ListOpen() string {
@@ -429,12 +927,16 @@ func ListOpen() string {
 	return out
 }
 
-func TokensOf(owner address) string {
+func TokensOf(owner string) string {
 	requireInit()
+	who := address(owner)
+	if !who.IsValid() {
+		return ""
+	}
 	out := ""
 	items.Iterate("", "", func(_ string, value any) bool {
 		it := value.(*item)
-		if it.owner != owner {
+		if it.owner != who {
 			return false
 		}
 		if out != "" {
@@ -444,6 +946,56 @@ func TokensOf(owner address) string {
 		return false
 	})
 	return out
+}
+
+func TokenOfOwnerByIndex(owner string, index int64) string {
+	requireInit()
+	who := address(owner)
+	if !who.IsValid() {
+		panic("col: addr")
+	}
+	if index < 0 {
+		panic("col: index")
+	}
+	var n int64
+	found := ""
+	items.Iterate("", "", func(_ string, value any) bool {
+		it := value.(*item)
+		if it.owner != who {
+			return false
+		}
+		if n == index {
+			found = strconv.Itoa(it.id)
+			return true
+		}
+		n++
+		return false
+	})
+	if found == "" {
+		panic("col: index")
+	}
+	return found
+}
+
+func TokenByIndex(index int64) string {
+	requireInit()
+	if index < 0 {
+		panic("col: index")
+	}
+	var n int64
+	found := ""
+	items.Iterate("", "", func(_ string, value any) bool {
+		if n == index {
+			found = strconv.Itoa(value.(*item).id)
+			return true
+		}
+		n++
+		return false
+	})
+	if found == "" {
+		panic("col: index")
+	}
+	return found
 }
 
 func Creator() string {
@@ -488,11 +1040,24 @@ func SetRoyalty(cur realm, bps int) {
 }
 
 func RarityOf(id int) string {
-	return mustItem(id).rarity
+	it := mustItem(id)
+	if !it.revealed {
+		return ""
+	}
+	return it.rarity
 }
 
 func TraitsOf(id int) string {
-	return mustItem(id).traits
+	it := mustItem(id)
+	if !it.revealed {
+		return ""
+	}
+	return it.traits
+}
+
+func Paused() bool {
+	requireInit()
+	return paused
 }
 
 func Render(_ string) string {
@@ -515,9 +1080,6 @@ func mintTo(cur realm, caller address, name, imageURL string) int {
 	requireInit()
 	if !cur.IsCurrent() {
 		panic("col: spoofed realm")
-	}
-	if paused {
-		panic("col: paused")
 	}
 	if maxSupply > 0 && minted >= maxSupply {
 		panic("col: sold out")
@@ -549,20 +1111,6 @@ func mintTo(cur realm, caller address, name, imageURL string) int {
 	return id
 }
 
-func takeLaunchFee(cur realm) {
-	fee := factory.LaunchFee()
-	who := factory.ReservedCreator(lastElem(cur.PkgPath()))
-	if who != "" && who == cur.Previous().Address().String() {
-		takeExact(0)
-		return
-	}
-	takeExact(fee)
-	if fee > 0 {
-		bk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
-		bk.SendCoins(cur.Address(), factory.Address(), chain.Coins{{Denom: nativeDenom, Amount: fee}})
-	}
-}
-
 func takeExact(want int64) {
 	sent := unsafe.OriginSend()
 	if want == 0 {
@@ -573,6 +1121,34 @@ func takeExact(want int64) {
 	}
 	if len(sent) != 1 || sent[0].Denom != nativeDenom || sent[0].Amount != want {
 		panic("col: wrong payment")
+	}
+}
+
+func prerevealImage() string {
+	if prereveal != "" {
+		return prereveal
+	}
+	return colCover
+}
+
+func sealedIDs() []int {
+	out := []int{}
+	items.Iterate("", "", func(_ string, value any) bool {
+		it := value.(*item)
+		if !it.revealed && it.slot >= 0 {
+			out = append(out, it.id)
+		}
+		return false
+	})
+	return out
+}
+
+func paintSealed(image string) {
+	for _, id := range sealedIDs() {
+		it := mustItem(id)
+		it.image = image
+		items.Set(itemKey(id), it)
+		writeTokenMeta(id)
 	}
 }
 
@@ -603,6 +1179,14 @@ func requireUser(cur realm) address {
 
 func itemTid(id int) grc721.TokenID {
 	return grc721.TokenID(strconv.Itoa(id))
+}
+
+func parseTid(tid string) int {
+	id, err := strconv.Atoi(tid)
+	if err != nil || id < 1 {
+		panic("col: tid")
+	}
+	return id
 }
 
 func mustItem(id int) *item {
@@ -651,6 +1235,7 @@ func applySlot(id int, s *dropSlot, slotIndex int) {
 
 func writeTokenMeta(id int) {
 	it := mustItem(id)
+	name, image, attrs := publicMeta(it)
 	uri := tokenJSON(it)
 	if metaLed == nil {
 		return
@@ -659,24 +1244,32 @@ func writeTokenMeta(id int) {
 		panic("col: tokenURI")
 	}
 	if err := metaLed.SetTokenMetadata(itemTid(id), metadata.Data{
-		Name:        it.name,
+		Name:        name,
 		Description: colName + " #" + strconv.Itoa(id),
-		Image:       absImage(it.image),
-		Attributes:  traitAttrs(it),
+		Image:       absImage(image),
+		Attributes:  attrs,
 	}); err != nil {
 		panic("col: metadata")
 	}
 }
 
+func publicMeta(it *item) (string, string, []metadata.Trait) {
+	if !it.revealed {
+		return "Unrevealed", prerevealImage(), []metadata.Trait{}
+	}
+	return it.name, it.image, traitAttrs(it)
+}
+
 func tokenJSON(it *item) string {
+	name, image, traits := publicMeta(it)
 	attrs := ""
-	for _, tr := range traitAttrs(it) {
+	for _, tr := range traits {
 		if attrs != "" {
 			attrs += ","
 		}
 		attrs += `{"trait_type":` + jsonStr(tr.TraitType) + `,"value":` + jsonStr(tr.Value) + `}`
 	}
-	body := `{"name":` + jsonStr(it.name) + `,"description":` + jsonStr(colName+" #"+strconv.Itoa(it.id)) + `,"image":` + jsonStr(absImage(it.image)) + `,"attributes":[` + attrs + `]}`
+	body := `{"name":` + jsonStr(name) + `,"description":` + jsonStr(colName+" #"+strconv.Itoa(it.id)) + `,"image":` + jsonStr(absImage(image)) + `,"attributes":[` + attrs + `]}`
 	return "data:application/json;charset=utf-8," + pctURI(body)
 }
 
@@ -794,7 +1387,7 @@ func validRarity(s string) bool {
 	if s == "" {
 		return true
 	}
-	return s == "Common" || s == "Uncommon" || s == "Rare" || s == "Epic" || s == "Legendary"
+	return s == "Common" || s == "Uncommon" || s == "Rare" || s == "Epic" || s == "Legendary" || s == "Mythic"
 }
 
 func validTraits(s string) bool {
@@ -834,6 +1427,16 @@ func validTraits(s string) bool {
 		}
 	}
 	return n >= 1
+}
+
+func validG1(s string) bool {
+	if len(s) < 39 || len(s) > 64 {
+		return false
+	}
+	if s[0] != 'g' || s[1] != '1' {
+		return false
+	}
+	return asciiSet(s, "abcdefghijklmnopqrstuvwxyz0123456789")
 }
 
 func validPkgName(s string) bool {

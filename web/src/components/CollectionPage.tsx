@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatFloorPct, type ExploreCollection } from "../lib/catalog";
 import {
   activityKindLabel,
   filterListedItems,
+  hasListedAsk,
   isOwnListing,
   itemRowKey,
   sameAddr,
@@ -26,17 +27,28 @@ import {
   type SortDir,
 } from "../lib/chain";
 import type { ChartPoint } from "../lib/chart";
+import { CollectionBio } from "./CollectionBio";
+import type { MintRoundCard } from "../lib/mintrounds";
 import { CopyLine } from "./CopyLine";
 import { EmptyState } from "./EmptyState";
 import { ItemArt } from "./ItemArt";
-import { ItemToolbar } from "./ItemToolbar";
 import { ListingCard } from "./ListingCard";
+import { SkeletonGrid } from "./SkeletonGrid";
 import { PriceChart } from "./PriceChart";
 import { PriceMark } from "./PriceMark";
 import { Select } from "./Select";
 import { TraitFilters } from "./TraitFilters";
 
-type Pane = "items" | "offers" | "pool" | "chart" | "activity";
+type Pane = "items" | "offers" | "chart" | "activity";
+
+const ITEM_SORT_OPTIONS: { value: `${ItemSort}:${SortDir}`; label: string }[] = [
+  { value: "price:asc", label: "Price: Low to high" },
+  { value: "price:desc", label: "Price: High to low" },
+  { value: "name:asc", label: "Name: A to Z" },
+  { value: "name:desc", label: "Name: Z to A" },
+  { value: "id:asc", label: "ID: Low to high" },
+  { value: "id:desc", label: "ID: High to low" },
+];
 
 type Props = {
   collection: ExploreCollection | null;
@@ -74,9 +86,19 @@ type Props = {
   cart?: Item[];
   onCart?: (item: Item) => void;
   onReveal?: (id: string) => void;
+  onSyncNft?: (item: Item) => void;
   onOpenMint?: (slug: string) => void;
+  onRevealCollection?: () => void;
+  sealed?: boolean;
+  creatorAddr?: string;
+  mintRounds?: MintRoundCard[];
   hasOffers?: boolean;
   hasPool?: boolean;
+  loading?: boolean;
+  activityLoading?: boolean;
+  moreCount?: number;
+  moreBusy?: boolean;
+  onLoadMore?: () => void;
 };
 
 export function CollectionPage({
@@ -95,9 +117,6 @@ export function CollectionPage({
   onCancel,
   wallet,
   offers = [],
-  pool,
-  poolNfts = [],
-  poolShares = 0,
   socials,
   connected,
   blocked,
@@ -105,40 +124,44 @@ export function CollectionPage({
   onOffer,
   onCancelOffer,
   onAcceptOffer,
-  onDepositPool,
-  onWithdrawPool,
-  onDepositNft,
-  onWithdrawNft,
   onConnect,
   onInstantSell,
   onSweep,
   cart = [],
   onCart,
   onReveal,
+  onSyncNft,
   onOpenMint,
+  onRevealCollection,
+  sealed = false,
+  creatorAddr = "",
+  mintRounds = [],
   hasOffers = true,
-  hasPool = true,
+  loading = false,
+  activityLoading = false,
+  moreCount = 0,
+  moreBusy = false,
+  onLoadMore,
 }: Props) {
 
   const [pane, setPane] = useState<Pane>("items");
   useEffect(() => {
-    if (collection?.pkg && (pane === "offers" || pane === "pool")) setPane("items");
-  }, [collection?.pkg, pane]);
+    if (collection?.pkg && !hasOffers && pane === "offers") setPane("items");
+  }, [collection?.pkg, hasOffers, pane]);
   const [sort, setSort] = useState<ItemSort>("price");
   const [dir, setDir] = useState<SortDir>("asc");
   const [rarity, setRarity] = useState("all");
   const [minGnot, setMinGnot] = useState("");
   const [maxGnot, setMaxGnot] = useState("");
   const [listedOnly, setListedOnly] = useState(true);
+  const listedTouch = useRef(false);
   const [traitSel, setTraitSel] = useState<Record<string, string[]>>({});
   const [offerId, setOfferId] = useState("");
   const [offerGnot, setOfferGnot] = useState("1");
-  const [poolGnot, setPoolGnot] = useState("1");
-  const [poolNftId, setPoolNftId] = useState("");
-  const [withdrawShares, setWithdrawShares] = useState("");
   const [sweepN, setSweepN] = useState(1);
 
   useEffect(() => {
+    listedTouch.current = false;
     setPane("items");
     setRarity("all");
     setMinGnot("");
@@ -147,6 +170,11 @@ export function CollectionPage({
     setTraitSel({});
     setSweepN(1);
   }, [slug]);
+
+  useEffect(() => {
+    if (loading || listedTouch.current) return;
+    setListedOnly(hasListedAsk(items));
+  }, [slug, items, loading]);
 
   const visibleItems = useMemo(
     () =>
@@ -177,10 +205,7 @@ export function CollectionPage({
     { href: socialHref(socials?.twitter || collection?.twitter || ""), label: "X" },
     { href: socialHref(socials?.discord || collection?.discord || ""), label: "Discord" },
   ].filter((row) => row.href);
-  const ownUnlisted = useMemo(
-    () => items.filter((it) => it.id && !it.listed && sameAddr(it.owner, wallet)),
-    [items, wallet],
-  );
+  const liveRound = mintRounds.find((row) => row.state === "live");
   const offerable = useMemo(
     () => items.filter((it) => it.id && !sameAddr(it.owner, wallet) && !isOwnListing(it, wallet)),
     [items, wallet],
@@ -204,22 +229,8 @@ export function CollectionPage({
     }
   }, [offerable, offerId]);
 
-  useEffect(() => {
-    if (!poolNftId || !ownUnlisted.some((it) => it.id === poolNftId)) {
-      setPoolNftId(ownUnlisted[0]?.id || "");
-    }
-  }, [ownUnlisted, poolNftId]);
-
-  useEffect(() => {
-    if (!withdrawShares && poolShares > 0) setWithdrawShares(String(poolShares));
-  }, [poolShares, withdrawShares]);
-
   const locked = !!blocked || !!busy;
   const offerOptions = offerable.map((it) => ({
-    value: it.id,
-    label: `${it.name} #${it.id}`,
-  }));
-  const nftOptions = ownUnlisted.map((it) => ({
     value: it.id,
     label: `${it.name} #${it.id}`,
   }));
@@ -234,72 +245,111 @@ export function CollectionPage({
 
       <header className="collection-hero">
         <div className="collection-banner">
-          <ItemArt name={name} image={cover} alt="" />
+          <ItemArt name={name} image={cover} alt="" priority />
         </div>
         <div className="collection-hero-copy">
           <div className="collection-hero-top">
-            <div>
+            <div className="collection-hero-id">
               <h1>
                 {name}
                 {collection?.paused ? <span className="tag">Paused</span> : null}
               </h1>
-              <div className="collection-ids is-stack">
+              <div className="collection-ids">
                 {collection?.pkg ? (
-                  <CopyLine
-                    variant="row"
-                    label="Realm"
-                    display={shortPkgPath(collection.pkg)}
-                    value={collection.pkg}
-                  />
+                  <CopyLine label="Realm" display={shortPkgPath(collection.pkg)} value={collection.pkg} />
                 ) : null}
                 {collection?.addr ? (
-                  <CopyLine
-                    variant="row"
-                    label="Address"
-                    display={shortAddr(collection.addr)}
-                    value={collection.addr}
-                  />
+                  <CopyLine label="Address" display={shortAddr(collection.addr)} value={collection.addr} />
                 ) : null}
               </div>
-              {collection?.bio ? <p className="collection-bio">{collection.bio}</p> : null}
-              {links.length > 0 ? (
-                <p className="collection-socials">
-                  {links.map((row) => (
-                    <a key={row.label} href={row.href} target="_blank" rel="noreferrer">
-                      {row.label}
-                    </a>
-                  ))}
-                </p>
-              ) : null}
             </div>
             {collection && isPublicDrop(collection) && onOpenMint ? (
               <div className="collection-hero-actions">
-                <button className="btn primary" type="button" onClick={() => onOpenMint(slug)}>
+                <button
+                  className={
+                    (!isOpenEdition(collection) && collection.minted >= collection.maxSupply) || collection.paused
+                      ? "btn"
+                      : "btn primary"
+                  }
+                  type="button"
+                  onClick={() => onOpenMint(slug)}
+                >
                   {!isOpenEdition(collection) && collection.minted >= collection.maxSupply
                     ? "Sold out"
                     : collection.paused
                       ? "Mint paused"
-                      : collection.mintPrice > 0
+                      : liveRound && liveRound.priceUgnot > 0
                         ? (
                             <>
-                              Mint · <PriceMark ugnot={collection.mintPrice} size={13} />
+                              Mint · <PriceMark ugnot={liveRound.priceUgnot} size={13} />
                             </>
                           )
-                        : "Mint"}
+                      : liveRound
+                        ? "Mint"
+                        : mintRounds.length > 0
+                          ? "View mint"
+                          : collection.mintPrice > 0
+                            ? (
+                                <>
+                                  Mint · <PriceMark ugnot={collection.mintPrice} size={13} />
+                                </>
+                              )
+                            : "Mint"}
                 </button>
               </div>
             ) : null}
           </div>
+          <CollectionBio
+            slug={slug}
+            chainBio={collection?.bio || ""}
+            creator={creatorAddr || ""}
+            wallet={wallet || ""}
+            name={collection?.name || slug}
+            cover={collection?.cover || ""}
+          />
+          {links.length > 0 ? (
+            <p className="collection-socials">
+              {links.map((row) => (
+                <a key={row.label} href={row.href} target="_blank" rel="noreferrer">
+                  {row.label}
+                </a>
+              ))}
+            </p>
+          ) : null}
+          {sealed ? (
+            <div className="mint-wallet-note">
+              <p>
+                Sealed. Reveal opens every minted NFT in one signature. Names and art replace Unrevealed.
+                {(collection?.minted || 0) < 1
+                  ? " Nothing is minted yet, so reveal also publishes the slot list."
+                  : ""}
+              </p>
+              {connected && sameAddr(wallet, creatorAddr) && onRevealCollection ? (
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={locked}
+                  onClick={onRevealCollection}
+                >
+                  Reveal collection
+                </button>
+              ) : !connected ? (
+                <p>Connect the creator wallet to reveal.</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="collection-stats stats-wide">
             {collection?.pkg && isPublicDrop(collection) ? (
               <>
-                <Stat
-                  label="Mint"
-                  value={
-                    collection.mintPrice > 0 ? <PriceMark ugnot={collection.mintPrice} /> : "Free"
-                  }
-                />
+                {mintRounds.length === 0 ? (
+                  <Stat
+                    label="Mint"
+                    value={
+                      collection.mintPrice > 0 ? <PriceMark ugnot={collection.mintPrice} /> : "Free"
+                    }
+                  />
+                ) : null}
                 <Stat
                   label="Remaining"
                   value={
@@ -338,9 +388,9 @@ export function CollectionPage({
       <div className="col-tabs" role="tablist" aria-label="Collection">
         {(
           (
-            collection?.pkg
-              ? ([["items", "Items"], ["chart", "Chart"], ["activity", "Activity"]] as const)
-              : ([["items", "Items"], ["offers", "Offers"], ["pool", "Pool"], ["chart", "Chart"], ["activity", "Activity"]] as const)
+            hasOffers || !collection?.pkg
+              ? ([["items", "Items"], ["offers", "Offers"], ["chart", "Chart"], ["activity", "Activity"]] as const)
+              : ([["items", "Items"], ["chart", "Chart"], ["activity", "Activity"]] as const)
           )
         ).map(([id, label]) => (
           <button
@@ -356,66 +406,16 @@ export function CollectionPage({
         ))}
       </div>
 
-      {pane === "items" ? (
-        <ItemToolbar
-          countLabel={`${visibleItems.length} of ${itemCount} items`}
-          rarity="all"
-          minGnot=""
-          maxGnot=""
-          sort={sort}
-          dir={dir}
-          onRarity={() => undefined}
-          onMin={() => undefined}
-          onMax={() => undefined}
-          compact
-          onSort={setSort}
-          onDir={() => setDir((d) => (d === "asc" ? "desc" : "asc"))}
-          extra={
-            sweepMax > 0 && onSweep ? (
-              <div className="sweep-mini">
-                <span className="sweep-mini-label">Sweep</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={sweepMax}
-                  value={Math.min(sweepN, sweepMax) || 1}
-                  onChange={(e) => setSweepN(Number(e.target.value) || 1)}
-                  aria-label="Sweep count"
-                />
-                <span className="num sweep-mini-n">{quote.count}</span>
-                <span className="muted sweep-mini-px">{quote.total > 0 ? <PriceMark ugnot={quote.total} /> : "—"}</span>
-                {connected ? (
-                  <button
-                    className="btn primary"
-                    type="button"
-                    disabled={locked || quote.count < 1}
-                    onClick={() => onSweep?.(quote.ids, quote.total)}
-                  >
-                    Buy
-                  </button>
-                ) : (
-                  <button className="btn primary" type="button" onClick={onConnect}>
-                    Connect
-                  </button>
-                )}
-              </div>
-            ) : null
-          }
-        />
-      ) : (
+      {pane === "items" ? null : (
         <div className="toolbar">
           <p className="muted toolbar-count">
             {pane === "offers"
               ? `${offers.length} ${offers.length === 1 ? "offer" : "offers"}`
-              : pane === "pool"
-                ? (
-                    <>
-                      <PriceMark ugnot={pool?.gnot || 0} size={13} /> · {pool?.nfts || 0} NFTs
-                    </>
-                  )
-                : pane === "chart"
+              : pane === "chart"
                   ? `${chartPoints.length} ${chartPoints.length === 1 ? "price" : "prices"} · GNOT`
-                  : `${activity.length} ${activity.length === 1 ? "event" : "events"}${sourceLabel ? ` · ${sourceLabel}` : ""}`}
+                  : activityLoading && activity.length === 0
+                    ? "Loading activity…"
+                    : `${activity.length} ${activity.length === 1 ? "event" : "events"}${sourceLabel ? ` · ${sourceLabel}` : ""}`}
           </p>
         </div>
       )}
@@ -432,7 +432,10 @@ export function CollectionPage({
           <TraitFilters
             items={items}
             listedOnly={listedOnly}
-            onListedOnly={setListedOnly}
+            onListedOnly={(on) => {
+              listedTouch.current = true;
+              setListedOnly(on);
+            }}
             minGnot={minGnot}
             maxGnot={maxGnot}
             onMin={setMinGnot}
@@ -457,63 +460,135 @@ export function CollectionPage({
               onQuery("");
             }}
           />
-        {visibleItems.length > 0 ? (
-          <>
-            <div className="listing-grid">
-              {visibleItems.map((row) => (
-                <ListingCard
-                  key={itemRowKey(row)}
-                  item={row}
-                  onOpen={onOpenItem}
-                  onBuy={onBuy}
-                  onSell={onSell}
-                  onCancel={onCancel}
-                  onReveal={onReveal ? (it) => onReveal(it.id) : undefined}
-                  onMakeOffer={onOpenItem}
-                  onCart={onCart}
-                  inCart={cart.some((c) => itemRowKey(c) === itemRowKey(row))}
-                  onInstantSell={
-                    onInstantSell
-                      ? (it) => onInstantSell(it.id)
-                      : onAcceptOffer
-                        ? (it) => {
-                            const top = topOfferFor(offers, it.id);
-                            if (top) onAcceptOffer(it.id, top.bidder);
-                          }
-                        : undefined
-                  }
-                  wallet={wallet}
-                  owned={!!wallet && (sameAddr(row.owner, wallet) || sameAddr(row.seller, wallet))}
-                  topOffer={topOfferFor(offers, row.id)}
-                />
-              ))}
+          <div className="collection-items">
+            <div className="collection-tools">
+              <p className="muted toolbar-count">
+                {visibleItems.length} of {Math.max(itemCount, supply || 0)}{" "}
+                {Math.max(itemCount, supply || 0) === 1 ? "item" : "items"}
+              </p>
+              <Select
+                ariaLabel="Sort items"
+                value={`${sort}:${dir}`}
+                onChange={(v) => {
+                  const [nextSort, nextDir] = v.split(":");
+                  if (nextSort === "price" || nextSort === "name" || nextSort === "id") setSort(nextSort);
+                  if (nextDir === "asc" || nextDir === "desc") setDir(nextDir);
+                }}
+                options={ITEM_SORT_OPTIONS}
+              />
             </div>
-          </>
-        ) : (
-          <EmptyState
-            title={query.trim() || minGnot.trim() || maxGnot.trim() || Object.keys(traitSel).length ? "No matches" : "No items"}
-            body={
-              query.trim() || minGnot.trim() || maxGnot.trim() || Object.keys(traitSel).length
-                ? "Nothing matches those filters."
-                : "This collection has no items yet."
-            }
-          >
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                onQuery("");
-                setRarity("all");
-                setMinGnot("");
-                setMaxGnot("");
-                setListedOnly(false);
-                setTraitSel({});
-              }}
-            >
-              Clear filters
-            </button>
-          </EmptyState>
-        )}
+            {sweepMax > 0 && onSweep ? (
+              <div className="sweep-bar">
+                <span className="sweep-bar-label">Sweep</span>
+                <label className="sweep-range">
+                  <span className="sr-only">Sweep count</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={sweepMax}
+                    value={Math.min(sweepN, sweepMax) || 1}
+                    onChange={(e) => setSweepN(Number(e.target.value) || 1)}
+                    aria-label="Sweep count"
+                  />
+                </label>
+                <span className="sweep-bar-meta">
+                  <strong className="num">{quote.count}</strong>
+                  <span className="muted">{quote.count === 1 ? "item" : "items"}</span>
+                </span>
+                <span className="sweep-bar-total">
+                  {quote.total > 0 ? <PriceMark ugnot={quote.total} size={16} /> : "—"}
+                </span>
+                {connected ? (
+                  <button
+                    className="btn primary"
+                    type="button"
+                    disabled={locked || quote.count < 1}
+                    onClick={() => onSweep?.(quote.ids, quote.total)}
+                  >
+                    Buy {quote.count}
+                  </button>
+                ) : (
+                  <button className="btn primary" type="button" onClick={onConnect}>
+                    Connect
+                  </button>
+                )}
+              </div>
+            ) : null}
+            {loading ? (
+              <SkeletonGrid />
+            ) : visibleItems.length > 0 ? (
+              <div className="listing-grid">
+                {visibleItems.map((row) => (
+                  <ListingCard
+                    key={itemRowKey(row)}
+                    item={row}
+                    onOpen={onOpenItem}
+                    onBuy={onBuy}
+                    onSell={onSell}
+                    onCancel={onCancel}
+                    onReveal={onReveal ? (it) => onReveal(it.id) : undefined}
+                    onSync={onSyncNft}
+                    onMakeOffer={onOffer ? onOpenItem : undefined}
+                    onCart={onCart}
+                    inCart={cart.some((c) => itemRowKey(c) === itemRowKey(row))}
+                    onInstantSell={
+                      onInstantSell
+                        ? (it) => onInstantSell(it.id)
+                        : onAcceptOffer
+                          ? (it) => {
+                              const top = topOfferFor(offers, it.id);
+                              if (top) onAcceptOffer(it.id, top.bidder);
+                            }
+                          : undefined
+                    }
+                    wallet={wallet}
+                    owned={!!wallet && (sameAddr(row.owner, wallet) || sameAddr(row.seller, wallet))}
+                    topOffer={topOfferFor(offers, row.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title={
+                  query.trim() || minGnot.trim() || maxGnot.trim() || Object.keys(traitSel).length
+                    ? "No matches"
+                    : listedOnly && items.length > 0
+                      ? "No listed items"
+                      : "No items"
+                }
+                body={
+                  query.trim() || minGnot.trim() || maxGnot.trim() || Object.keys(traitSel).length
+                    ? "Nothing matches those filters."
+                    : listedOnly && items.length > 0
+                      ? "Turn off Listed in Filters to see the rest of the collection."
+                      : "This collection has no items yet."
+                }
+              >
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    listedTouch.current = true;
+                    onQuery("");
+                    setRarity("all");
+                    setMinGnot("");
+                    setMaxGnot("");
+                    setListedOnly(false);
+                    setTraitSel({});
+                  }}
+                >
+                  Clear filters
+                </button>
+              </EmptyState>
+            )}
+            {moreCount > 0 ? (
+              <div className="load-more">
+                <button className="btn" type="button" disabled={moreBusy || !onLoadMore} onClick={onLoadMore}>
+                  {moreBusy ? "Loading…" : `Load ${moreCount} more`}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -521,7 +596,7 @@ export function CollectionPage({
         !hasOffers ? (
           <EmptyState
             title="Offers not on this package"
-            body="Pearl nftv2 has List and Buy only. Offer needs a newer module path (nftv3). Local gnodev with current source can Offer."
+            body="This package has List and Buy only."
           >
             <button className="btn" type="button" onClick={() => setPane("items")}>
               View items
@@ -564,7 +639,7 @@ export function CollectionPage({
                     Connect Adena
                   </button>
                 )}
-                <p className="hint">Escrowed ugnot. Owner or seller can accept. 50 bps on accept.</p>
+                <p className="hint">Escrowed ugnot. The owner or the seller can accept. Accept uses the same fee split as Buy.</p>
               </>
             ) : (
               <p className="muted">No items you can bid on in this collection.</p>
@@ -638,136 +713,6 @@ export function CollectionPage({
         )
       ) : null}
 
-      {pane === "pool" ? (
-        !hasPool ? (
-          <EmptyState
-            title="Pool not on this package"
-            body="Pearl nftv2 has no collection pool. Deploy a newer module path to deposit GNOT or NFTs."
-          >
-            <button className="btn" type="button" onClick={() => setPane("items")}>
-              View items
-            </button>
-          </EmptyState>
-        ) : (
-        <div className="book-stack">
-          <div className="pool-grid">
-            <section className="panel">
-              <h2>GNOT pool</h2>
-              <dl className="pool-facts">
-                <div>
-                  <dt>Liquidity</dt>
-                  <dd>
-                    <PriceMark ugnot={pool?.gnot || 0} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Shares</dt>
-                  <dd className="num">{pool?.shares || 0}</dd>
-                </div>
-                <div>
-                  <dt>Your shares</dt>
-                  <dd className="num">{poolShares}</dd>
-                </div>
-              </dl>
-              <label>
-                Deposit (GNOT)
-                <input inputMode="decimal" value={poolGnot} onChange={(e) => setPoolGnot(e.target.value)} />
-              </label>
-              {connected ? (
-                <button
-                  className="btn primary"
-                  type="button"
-                  disabled={locked}
-                  onClick={() => onDepositPool?.(slug, ugnotFromGnot(poolGnot))}
-                >
-                  Add GNOT
-                </button>
-              ) : (
-                <button className="btn primary" type="button" onClick={onConnect}>
-                  Connect Adena
-                </button>
-              )}
-              {poolShares > 0 ? (
-                <>
-                  <label>
-                    Withdraw shares
-                    <input
-                      inputMode="numeric"
-                      value={withdrawShares}
-                      onChange={(e) => setWithdrawShares(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={locked}
-                    onClick={() => onWithdrawPool?.(slug, Number(withdrawShares) || 0)}
-                  >
-                    Withdraw
-                  </button>
-                </>
-              ) : null}
-              <p className="hint">Pro-rata ugnot. Shares mint 1:1 on first deposit.</p>
-            </section>
-            <section className="panel">
-              <h2>NFT pool</h2>
-              <p className="muted">{pool?.nfts || 0} items locked as collection liquidity.</p>
-              {nftOptions.length > 0 ? (
-                <>
-                  <label>
-                    Your unlisted NFT
-                    <Select
-                      ariaLabel="NFT to add to pool"
-                      value={poolNftId}
-                      options={nftOptions}
-                      onChange={setPoolNftId}
-                    />
-                  </label>
-                  <button
-                    className="btn primary"
-                    type="button"
-                    disabled={locked || !poolNftId}
-                    onClick={() => onDepositNft?.(poolNftId)}
-                  >
-                    Add NFT
-                  </button>
-                </>
-              ) : (
-                <p className="muted">
-                  {connected ? "Mint or cancel a listing to add an NFT." : "Connect to deposit an NFT you own."}
-                </p>
-              )}
-              {poolNfts.length > 0 ? (
-                <ul className="pool-nft-list">
-                  {poolNfts.map((row) => (
-                    <li key={row.id}>
-                      <span>
-                        {row.name} <span className="muted">#{row.id}</span>
-                      </span>
-                      {sameAddr(row.depositor, wallet) ? (
-                        <button
-                          className="btn"
-                          type="button"
-                          disabled={locked}
-                          onClick={() => onWithdrawNft?.(row.id)}
-                        >
-                          Withdraw
-                        </button>
-                      ) : (
-                        <span className="mono muted">{shortAddr(row.depositor)}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="hint">Depositor can withdraw the same NFT later.</p>
-              )}
-            </section>
-          </div>
-        </div>
-        )
-      ) : null}
-
       {pane === "activity" ? (
         activity.length > 0 ? (
           <>
@@ -797,7 +742,7 @@ export function CollectionPage({
                           </span>
                         </td>
                         <td>
-                          <strong>{row.name || row.slug || "Item"}</strong>
+                          <strong>{item?.name || row.name || row.slug || "Item"}</strong>
                           {row.id ? <span className="muted"> #{row.id}</span> : null}
                         </td>
                         <td className="mono muted">{row.actor ? shortAddr(row.actor) : "—"}</td>
@@ -817,8 +762,10 @@ export function CollectionPage({
               </table>
             </div>
           </>
+        ) : activityLoading ? (
+          <p className="muted">Loading activity…</p>
         ) : (
-          <EmptyState title="No activity yet" body="Mints, lists, sales, offers, and pool moves show up here.">
+          <EmptyState title="No activity yet" body="Mints, lists, and sales show up here.">
             <button className="btn" type="button" onClick={() => setPane("items")}>
               View items
             </button>

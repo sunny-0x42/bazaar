@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ipfsToHttp,
+  isDropMintPrice,
   isDropSlug,
   isMintImage,
   isMintName,
   isOpenEdition,
   isPublicDrop,
   sameAddr,
+  parseUtcMinute,
+  rarityClass,
   ugnotFromGnot,
   type ChainCollection,
   type DropSlot,
@@ -15,6 +18,7 @@ import {
 import { jsonToSlotBlob, looksLikeJson } from "../lib/dropjson";
 import { ItemArt } from "./ItemArt";
 import { LaunchWizard, type LaunchPlan } from "./LaunchWizard";
+import { UtcMinuteField } from "./UtcMinuteField";
 import { Select } from "./Select";
 import { hasAdena } from "../lib/wallets";
 
@@ -38,16 +42,23 @@ type Props = {
   onPauseMint?: (slug: string) => void;
   onResumeMint?: (slug: string) => void;
   onSetMintPrice?: (slug: string, ugnot: number) => void;
+  onSetDropSale?: (slug: string, priceUgnot: number, qty: number) => void;
   onAddAllowlist?: (slug: string, blob: string) => void;
   onSetMintCap?: (slug: string, n: number) => void;
+  onSetPhaseMintCap?: (slug: string, wl: number, pub: number) => void;
   onStartPublic?: (slug: string) => void;
+  onSetMintSchedule?: (slug: string, wlStart: number, wlEnd: number, publicStart: number, publicEnd: number) => void;
   dropHidden?: boolean;
+  dropPrereveal?: string;
   dropLoaded?: number;
   dropAllowN?: number;
   dropMintCap?: number;
   onSetHidden?: (slug: string, hidden: boolean) => void;
+  onSetPrereveal?: (slug: string, image: string) => void;
+  onRevealCollection?: (slug: string) => void;
   onLaunchWizard?: (plan: LaunchPlan) => void;
   launchFeeUgnot?: number;
+  reserveSendUgnot?: number;
   network?: NetworkId;
 };
 
@@ -71,22 +82,31 @@ export function Launch({
   onPauseMint,
   onResumeMint,
   onSetMintPrice,
+  onSetDropSale,
   onAddAllowlist,
   onSetMintCap,
+  onSetPhaseMintCap,
   onStartPublic,
+  onSetMintSchedule,
   dropHidden,
+  dropPrereveal = "",
   dropLoaded,
   dropAllowN = 0,
   dropMintCap = 0,
   onSetHidden,
+  onSetPrereveal,
+  onRevealCollection,
   onLaunchWizard,
   launchFeeUgnot = 1_000_000_000,
+  reserveSendUgnot,
   network = "pearl",
 }: Props) {
   const [pane, setPane] = useState<Pane>("studio");
   const [studioPrice, setStudioPrice] = useState("");
   const [allowBlob, setAllowBlob] = useState("");
   const [capN, setCapN] = useState("");
+  const [wlCapN, setWlCapN] = useState("");
+  const [pubCapN, setPubCapN] = useState("");
   const [hideMeta, setHideMeta] = useState(true);
   const [itemName, setItemName] = useState("");
   const [itemImage, setItemImage] = useState("");
@@ -94,13 +114,16 @@ export function Launch({
   const [slotSlug, setSlotSlug] = useState("");
   const [slotBlob, setSlotBlob] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  useEffect(() => {
+    if (!connected) setShowCreate(true);
+  }, [connected]);
 
   const ownCols = useMemo(
     () => chainCollections.filter((c) => sameAddr(c.creator, wallet)),
     [chainCollections, wallet],
   );
   const drops = useMemo(() => ownCols.filter((c) => isPublicDrop(c)), [ownCols]);
-  const factoryPad = network === "pearl" || chainCollections.some((c) => !!c.pkg);
+  const factoryPad = network === "pearl" || network === "mainnet" || network === "onyx" || chainCollections.some((c) => !!c.pkg);
 
   const itemOk = isMintName(itemName) && isMintImage(itemImage);
 
@@ -114,7 +137,7 @@ export function Launch({
   }
 
   const destOptions = [
-    { value: "", label: "Bazaar (1/1)" },
+    { value: "", label: "Nomaq (1/1)" },
     ...ownCols.map((c) => ({ value: c.slug, label: `${c.name} (${c.slug})` })),
   ];
   const slotOptions = drops.map((c) => ({
@@ -171,16 +194,17 @@ export function Launch({
 
   const createForm = (
     <LaunchWizard
+      key="launch-wizard"
       connected={connected}
       blocked={blocked}
       busy={busy}
       onConnect={onConnect}
       onCancel={factoryPad || drops.length === 0 ? undefined : () => setShowCreate(false)}
       launchFeeUgnot={launchFeeUgnot}
+      reserveSendUgnot={reserveSendUgnot}
       network={network}
       onLaunch={(plan) => {
         pickSlotDrop(plan.slug);
-        setShowCreate(false);
         if (onLaunchWizard) onLaunchWizard(plan);
         else if (plan.extras) {
           onLaunchCollection([
@@ -207,12 +231,16 @@ export function Launch({
         <h1>Launch</h1>
         <p className="muted">
           One collection, one realm. Collectors mint at <span className="mono">#/m/{`{slug}`}</span>.
-          {launchFeeUgnot > 0 ? ` Reserve fee ${launchFeeUgnot / 1_000_000} GNOT.` : ""} Primary mint 0 bps ·
-          secondary 50 bps.
+          {reserveSendUgnot === 0 && launchFeeUgnot > 0
+            ? ` This wallet reserves free. Other wallets pay ${launchFeeUgnot / 1_000_000} GNOT.`
+            : launchFeeUgnot > 0
+              ? ` Reserve fee ${launchFeeUgnot / 1_000_000} GNOT.`
+              : ""}{" "}
+          Primary mint 0 bps ·
+          secondary 2% protocol (admin).
         </p>
       </header>
 
-      {factoryPad ? null : (
       <div className="col-tabs" role="tablist" aria-label="Launch">
         <button
           type="button"
@@ -242,40 +270,8 @@ export function Launch({
           Mint 1/1
         </button>
       </div>
-      )}
 
-      {factoryPad ? (
-        <div className="studio-stack">
-          {drops.length > 0 ? (
-            <ul className="admin-drop-list">
-              {drops.map((col) => (
-                <li key={col.slug}>
-                  <div className="admin-drop">
-                    <span>
-                      <strong>{col.name}</strong>{" "}
-                      <span className="mono muted">{col.slug}</span> {col.minted}/
-                      {col.maxSupply > 0 ? col.maxSupply : "∞"}
-                    </span>
-                    <span className="profile-links">
-                      {onOpenMint ? (
-                        <button className="btn primary" type="button" onClick={() => onOpenMint(col.slug)}>
-                          Mint
-                        </button>
-                      ) : null}
-                      {onOpenCollection ? (
-                        <button className="btn" type="button" onClick={() => onOpenCollection(col.slug)}>
-                          Collection
-                        </button>
-                      ) : null}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {createForm}
-        </div>
-      ) : pane === "studio" ? (
+      {pane === "studio" ? (
         <Studio
           drops={drops}
           connected={connected}
@@ -285,12 +281,16 @@ export function Launch({
           studioPrice={studioPrice}
           allowBlob={allowBlob}
           capN={capN}
+          wlCapN={wlCapN}
+          pubCapN={pubCapN}
           showCreate={showCreate || drops.length === 0}
           createForm={createForm}
           onPick={pickSlotDrop}
           onPrice={setStudioPrice}
           onAllow={setAllowBlob}
           onCap={setCapN}
+          onWlCap={setWlCapN}
+          onPubCap={setPubCapN}
           onConnect={onConnect}
           onOpenMint={onOpenMint}
           onOpenCollection={onOpenCollection}
@@ -299,14 +299,20 @@ export function Launch({
           onPauseMint={onPauseMint}
           onResumeMint={onResumeMint}
           onSetMintPrice={onSetMintPrice}
+          onSetDropSale={onSetDropSale}
           onAddAllowlist={onAddAllowlist}
           onSetMintCap={onSetMintCap}
+          onSetPhaseMintCap={onSetPhaseMintCap}
           onStartPublic={onStartPublic}
+          onSetMintSchedule={onSetMintSchedule}
           dropHidden={dropHidden}
+          dropPrereveal={dropPrereveal}
           dropLoaded={dropLoaded}
           dropAllowN={dropAllowN}
           dropMintCap={dropMintCap}
           onSetHidden={onSetHidden}
+          onSetPrereveal={onSetPrereveal}
+          onRevealCollection={onRevealCollection}
         />
       ) : pane === "slots" ? (
         <form
@@ -360,7 +366,7 @@ export function Launch({
                         #{row.index} {row.name}
                       </strong>
                       <span className="muted">
-                        {row.rarity || "-"}
+                        {row.rarity ? <span className={rarityClass(row.rarity)}>{row.rarity}</span> : "-"}
                         {row.traits ? ` / ${row.traits}` : ""}
                       </span>
                     </li>
@@ -399,7 +405,7 @@ export function Launch({
               </label>
               <label className="trait-check">
                 <input type="checkbox" checked={hideMeta} onChange={(e) => setHideMeta(e.target.checked)} />
-                Hide art and traits until the owner reveals
+                Hide art and traits until you reveal the collection
               </label>
               {connected ? (
                 <button
@@ -455,7 +461,7 @@ export function Launch({
           <label>
             Collection
             <Select ariaLabel="Mint into collection" value={itemSlug} options={destOptions} onChange={setItemSlug} />
-            <span className="hint">Bazaar is the default 1/1 book. Other collections must be ones you launched.</span>
+            <span className="hint">Nomaq is the default 1/1 book. Other collections must be ones you launched.</span>
           </label>
           </div>
           <label>
@@ -502,12 +508,16 @@ function Studio({
   studioPrice,
   allowBlob,
   capN,
+  wlCapN,
+  pubCapN,
   showCreate,
   createForm,
   onPick,
   onPrice,
   onAllow,
   onCap,
+  onWlCap,
+  onPubCap,
   onConnect,
   onOpenMint,
   onOpenCollection,
@@ -516,14 +526,20 @@ function Studio({
   onPauseMint,
   onResumeMint,
   onSetMintPrice,
+  onSetDropSale,
   onAddAllowlist,
   onSetMintCap,
+  onSetPhaseMintCap,
   onStartPublic,
+  onSetMintSchedule,
   dropHidden,
+  dropPrereveal,
   dropLoaded,
   dropAllowN,
   dropMintCap,
   onSetHidden,
+  onSetPrereveal,
+  onRevealCollection,
 }: {
   drops: ChainCollection[];
   connected: boolean;
@@ -533,12 +549,16 @@ function Studio({
   studioPrice: string;
   allowBlob: string;
   capN: string;
+  wlCapN: string;
+  pubCapN: string;
   showCreate: boolean;
   createForm: ReactNode;
   onPick: (slug: string) => void;
   onPrice: (v: string) => void;
   onAllow: (v: string) => void;
   onCap: (v: string) => void;
+  onWlCap: (v: string) => void;
+  onPubCap: (v: string) => void;
   onConnect: () => void;
   onOpenMint?: (slug: string) => void;
   onOpenCollection?: (slug: string) => void;
@@ -547,22 +567,48 @@ function Studio({
   onPauseMint?: (slug: string) => void;
   onResumeMint?: (slug: string) => void;
   onSetMintPrice?: (slug: string, ugnot: number) => void;
+  onSetDropSale?: (slug: string, priceUgnot: number, qty: number) => void;
   onAddAllowlist?: (slug: string, blob: string) => void;
   onSetMintCap?: (slug: string, n: number) => void;
+  onSetPhaseMintCap?: (slug: string, wl: number, pub: number) => void;
   onStartPublic?: (slug: string) => void;
+  onSetMintSchedule?: (slug: string, wlStart: number, wlEnd: number, publicStart: number, publicEnd: number) => void;
   dropHidden?: boolean;
+  dropPrereveal?: string;
   dropLoaded?: number;
   dropAllowN?: number;
   dropMintCap?: number;
   onSetHidden?: (slug: string, hidden: boolean) => void;
+  onSetPrereveal?: (slug: string, image: string) => void;
+  onRevealCollection?: (slug: string) => void;
 }) {
-  if (!connected) {
-    return <div className="studio-stack">{createForm}</div>;
-  }
-  if (drops.length === 0 || showCreate) {
+  const [preImage, setPreImage] = useState(dropPrereveal || "");
+  useEffect(() => {
+    setPreImage(dropPrereveal || "");
+  }, [dropPrereveal, slotSlug]);
+  const [wlPriceText, setWlPriceText] = useState("");
+  const [wlQtyText, setWlQtyText] = useState("");
+  const [wlStartText, setWlStartText] = useState("");
+  const [wlEndText, setWlEndText] = useState("");
+  const [publicStartText, setPublicStartText] = useState("");
+  const [publicEndText, setPublicEndText] = useState("");
+  const wlUnix = wlStartText.trim() ? parseUtcMinute(wlStartText) : 0;
+  const wlEndUnix = wlEndText.trim() ? parseUtcMinute(wlEndText) : 0;
+  const publicUnix = publicStartText.trim() ? parseUtcMinute(publicStartText) : 0;
+  const publicEndUnix = publicEndText.trim() ? parseUtcMinute(publicEndText) : 0;
+  const scheduleOk =
+    (wlStartText.trim() === "" || wlUnix != null) &&
+    (wlEndText.trim() === "" || wlEndUnix != null) &&
+    (publicStartText.trim() === "" || publicUnix != null) &&
+    (publicEndText.trim() === "" || publicEndUnix != null) &&
+    !(wlUnix && publicUnix && publicUnix <= wlUnix) &&
+    !(wlUnix && wlEndUnix && wlEndUnix <= wlUnix) &&
+    !(publicUnix && publicEndUnix && publicEndUnix <= publicUnix) &&
+    !(wlEndUnix && publicUnix && publicUnix < wlEndUnix);
+  if (!connected || drops.length === 0 || showCreate) {
     return (
       <div className="studio-stack">
-        {drops.length > 0 ? (
+        {connected && drops.length > 0 ? (
           <p className="profile-links">
             <button className="btn" type="button" onClick={onToggleCreate}>
               Back to drops
@@ -641,10 +687,6 @@ function Studio({
               <dt>Allowlist</dt>
               <dd>{dropAllowN && dropAllowN > 0 ? `${dropAllowN} wallets` : "Public"}</dd>
             </div>
-            <div>
-              <dt>Per-wallet cap</dt>
-              <dd>{dropMintCap && dropMintCap > 0 ? dropMintCap : "Unlimited"}</dd>
-            </div>
           </dl>
           <div className="profile-links">
             {onOpenMint ? (
@@ -676,19 +718,52 @@ function Studio({
                 Pause
               </button>
             )}
-            {onSetHidden ? (
+            {dropHidden && onRevealCollection ? (
+              <button
+                className="btn primary"
+                type="button"
+                disabled={blocked || busy || !(dropLoaded && dropLoaded > 0)}
+                onClick={() => onRevealCollection(selected.slug)}
+              >
+                Reveal collection
+              </button>
+            ) : null}
+            {onSetHidden && !dropHidden && (selected?.minted || 0) === 0 ? (
               <button
                 className="btn"
                 type="button"
                 disabled={blocked || busy || !(dropLoaded && dropLoaded > 0)}
-                onClick={() => onSetHidden(selected.slug, !dropHidden)}
+                onClick={() => onSetHidden(selected.slug, true)}
               >
-                {dropHidden ? "Unhide slots" : "Hide until Reveal"}
+                Hide until Reveal
               </button>
             ) : null}
           </div>
+          {dropHidden ? (
+            <label>
+              Image before reveal
+              <input
+                value={preImage}
+                onChange={(e) => setPreImage(e.target.value)}
+                maxLength={200}
+                spellCheck={false}
+                placeholder="ipfs://... or https:// or /samples/"
+              />
+              <span className="hint">
+                Collectors see this image until you reveal. Empty keeps the cover. Reveal opens every minted NFT.
+              </span>
+              <button
+                className="btn"
+                type="button"
+                disabled={blocked || busy || !onSetPrereveal || (preImage.trim() !== "" && !isMintImage(ipfsToHttp(preImage.trim())))}
+                onClick={() => onSetPrereveal?.(selected.slug, preImage.trim() ? ipfsToHttp(preImage.trim()) : "")}
+              >
+                Set pre-reveal image
+              </button>
+            </label>
+          ) : null}
           <label>
-            Mint price (GNOT)
+            Public mint price (GNOT)
             <input value={studioPrice} onChange={(e) => onPrice(e.target.value)} inputMode="decimal" placeholder="e.g. 1" />
           </label>
           <button
@@ -697,11 +772,12 @@ function Studio({
             disabled={blocked || busy || !studioPrice.trim()}
             onClick={() => onSetMintPrice?.(selected.slug, ugnotFromGnot(studioPrice))}
           >
-            Set price
+            Set public price
           </button>
           <label>
-            Per-wallet mint cap
+            Lifetime cap (all rounds)
             <input value={capN} onChange={(e) => onCap(e.target.value)} inputMode="numeric" placeholder="0 = unlimited" />
+            <span className="hint">Total PublicMint calls for one wallet across whitelist and public. 0 is unlimited.</span>
           </label>
           <button
             className="btn"
@@ -709,7 +785,63 @@ function Studio({
             disabled={blocked || busy || capN.trim() === ""}
             onClick={() => onSetMintCap?.(selected.slug, Number(capN) || 0)}
           >
-            Set cap
+            Set lifetime cap
+          </button>
+          {selected.pkg ? (
+            <>
+              <label>
+                Whitelist mints per wallet
+                <input value={wlCapN} onChange={(e) => onWlCap(e.target.value)} inputMode="numeric" placeholder="0 = unlimited" />
+              </label>
+              <label>
+                Public mints per wallet
+                <input value={pubCapN} onChange={(e) => onPubCap(e.target.value)} inputMode="numeric" placeholder="0 = unlimited" />
+                <span className="hint">Each round has its own count. A whitelist mint does not use the public allowance.</span>
+              </label>
+              <button
+                className="btn"
+                type="button"
+                disabled={blocked || busy || wlCapN.trim() === "" || pubCapN.trim() === ""}
+                onClick={() => onSetPhaseMintCap?.(selected.slug, Number(wlCapN) || 0, Number(pubCapN) || 0)}
+              >
+                Set round caps
+              </button>
+            </>
+          ) : null}
+          <label>
+            Whitelist price (GNOT)
+            <input value={wlPriceText} onChange={(e) => setWlPriceText(e.target.value)} inputMode="decimal" placeholder="e.g. 0.5" />
+            <span className="hint">0 is a free whitelist mint. This is separate from the public price.</span>
+          </label>
+          <label>
+            Whitelist quantity
+            <input value={wlQtyText} onChange={(e) => setWlQtyText(e.target.value)} inputMode="numeric" placeholder="e.g. 333" />
+            <span className="hint">How many mints use the whitelist price. The mint page shows this round after it is saved on chain.</span>
+          </label>
+          <button
+            className="btn"
+            type="button"
+            disabled={blocked || busy || !onSetDropSale || !isDropMintPrice(wlPriceText) || !(Number(wlQtyText) > 0)}
+            onClick={() => onSetDropSale?.(selected.slug, ugnotFromGnot(wlPriceText), Math.floor(Number(wlQtyText)))}
+          >
+            Set whitelist round
+          </button>
+          <div className="time-pair">
+            <UtcMinuteField label="Whitelist start (UTC)" value={wlStartText} onChange={setWlStartText} />
+            <UtcMinuteField label="Whitelist end (UTC)" value={wlEndText} onChange={setWlEndText} />
+          </div>
+          <div className="time-pair">
+            <UtcMinuteField label="Public start (UTC)" value={publicStartText} onChange={setPublicStartText} />
+            <UtcMinuteField label="Public end (UTC)" value={publicEndText} onChange={setPublicEndText} />
+          </div>
+          <span className="hint">Click the box. Pick a day, then an hour and a minute. The line under each box is the UTC time that was saved. Empty end stays open. Clear the time to remove it. Locked after the first mint.</span>
+          <button
+            className="btn"
+            type="button"
+            disabled={blocked || busy || !onSetMintSchedule || !scheduleOk}
+            onClick={() => onSetMintSchedule?.(selected.slug, wlUnix || 0, wlEndUnix || 0, publicUnix || 0, publicEndUnix || 0)}
+          >
+            Set round times
           </button>
           <label>
             Allowlist (g1, one per line)

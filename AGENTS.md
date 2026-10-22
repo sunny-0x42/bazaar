@@ -6,7 +6,7 @@ Never edit: `C:\Users\Hi\gnomemepad`, `C:\Users\Hi\zdex`, `C:\Users\Hi\gno-lendi
 
 ## Product
 
-Fixed-price NFT marketplace and collection launchpad on gno.land. Hub `SetModule` for upgrades. UI English.
+Fixed-price NFT marketplace and collection launchpad on **gno.land mainnet**. Factory bazaarv2. UI English, mainnet-only.
 
 ## Blockchain bar (Gno)
 
@@ -27,4 +27,4 @@ cd web; npm run dev
 
 Local UI: http://127.0.0.1:5176
 
-Pearl addpkg needs an explicit human yes. gnomcp `pearl` is read-only.
+Mainnet addpkg needs an explicit human yes. gnomcp `mainnet` is read-only. Frozen Pearl pkgs: do not overwrite.

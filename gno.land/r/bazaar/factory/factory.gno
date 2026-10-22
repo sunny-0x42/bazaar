@@ -19,8 +19,10 @@ const (
 	maxSupplyBound   = 1_000_000
 	maxRoyaltyBps    = 1000
 	maxSymbolLen     = 11
-	maxSlugLen       = 11
-	minSlugLen       = 2
+	maxSlugLen         = 11
+	minSlugLen         = 2
+	defaultProtocolBps = int64(200) // 2% Magic Eden
+	maxProtocolBps     = int64(500)
 )
 
 type collection struct {
@@ -36,16 +38,26 @@ type collection struct {
 	royaltyBps int
 }
 
+type reservation struct {
+	who  address
+	paid int64
+}
+
 var (
-	bySlug    avl.Tree
-	byPkg     avl.Tree
-	pending   avl.Tree
-	reserved  avl.Tree
-	inited    bool
-	admin     address
-	self      address
-	launchFee int64
-	seenBank  int64
+	bySlug      avl.Tree
+	byPkg       avl.Tree
+	reserved    avl.Tree
+	inited      bool
+	admin         address
+	self          address
+	protocolSink  address
+	launchFee        int64
+	protocolBps      int64
+	genesisPkg       string
+	genesisSink      address
+	genesisShareBps  int64
+	discountPusher   string
+	holderDisc       avl.Tree
 )
 
 func Init(cur realm) {
@@ -56,13 +68,19 @@ func Init(cur realm) {
 		panic("factory: EOA only")
 	}
 	admin = cur.Previous().Address()
+	protocolSink = admin
 	self = cur.Address()
 	bySlug = avl.Tree{}
 	byPkg = avl.Tree{}
-	pending = avl.Tree{}
 	reserved = avl.Tree{}
+	holderDisc = avl.Tree{}
+	genesisPkg = ""
+	genesisShareBps = 0
+	discountPusher = ""
+	var z address
+	genesisSink = z
 	launchFee = defaultLaunchFee
-	seenBank = bankUgnot()
+	protocolBps = defaultProtocolBps
 	inited = true
 	chain.Emit("Init", "admin", admin.String())
 }
@@ -90,29 +108,150 @@ func SetLaunchFee(cur realm, ugnot int64) {
 	chain.Emit("SetLaunchFee", "ugnot", strconv.FormatInt(ugnot, 10))
 }
 
-func CreditLaunchFee(cur realm) {
+func ProtocolBps() int64 {
+	requireInit()
+	if protocolBps <= 0 {
+		return defaultProtocolBps
+	}
+	return protocolBps
+}
+
+func SetProtocolBps(cur realm, bps int64) {
+	requireAdmin(cur)
+	if bps < 0 || bps > maxProtocolBps {
+		panic("factory: protocol bps")
+	}
+	protocolBps = bps
+	chain.Emit("SetProtocolBps", "bps", strconv.FormatInt(bps, 10))
+}
+
+func ProtocolSink() address {
+	requireInit()
+	return protocolSink
+}
+
+func SetProtocolSink(cur realm, next address) {
+	requireAdmin(cur)
+	if !next.IsValid() {
+		panic("factory: invalid address")
+	}
+	if next == protocolSink {
+		panic("factory: already sink")
+	}
+	protocolSink = next
+	chain.Emit("SetProtocolSink", "addr", next.String())
+}
+
+func GenesisPkg() string {
+	requireInit()
+	return genesisPkg
+}
+
+func GenesisSink() address {
+	requireInit()
+	return genesisSink
+}
+
+func GenesisShareBps() int64 {
+	requireInit()
+	if genesisPkg == "" {
+		return 0
+	}
+	if genesisShareBps <= 0 {
+		return 1100
+	}
+	return genesisShareBps
+}
+
+func HolderDiscount(owner string) int64 {
+	requireInit()
+	if genesisPkg == "" {
+		return 0
+	}
+	v := holderDisc.Get(strings.ToLower(strings.TrimSpace(owner)))
+	if v == nil {
+		return 0
+	}
+	return v.(int64)
+}
+
+func AttachGenesis(cur realm) {
 	requireInit()
 	prev := cur.Previous()
 	if !prev.IsCode() {
-		panic("factory: collection realm")
+		panic("factory: genesis realm")
+	}
+	eoa := prev.Previous()
+	if !eoa.IsUserCall() || eoa.Address() != admin {
+		panic("factory: not admin")
 	}
 	pkg := prev.PkgPath()
-	if pending.Has(pkg) {
-		panic("factory: already credited")
+	if pkg == "" {
+		panic("factory: genesis pkg")
 	}
-	if byPkg.Has(pkg) {
-		panic("factory: already registered")
+	if genesisPkg != "" && genesisPkg != pkg {
+		panic("factory: genesis set")
 	}
-	now := bankUgnot()
-	if now < seenBank {
-		panic("factory: bank")
+	genesisPkg = pkg
+	genesisSink = prev.Address()
+	if genesisShareBps <= 0 {
+		genesisShareBps = 1100
 	}
-	if now-seenBank != launchFee {
-		panic("factory: launch fee")
+	chain.Emit("AttachGenesis", "pkg", pkg)
+}
+
+func SetGenesis(cur realm, pkg string) {
+	requireAdmin(cur)
+	pkg = strings.TrimSpace(pkg)
+	if pkg == "" || !strings.HasPrefix(pkg, "gno.land/r/") {
+		panic("factory: genesis pkg")
 	}
-	seenBank = now
-	pending.Set(pkg, true)
-	chain.Emit("CreditLaunchFee", "pkg", pkg)
+	genesisPkg = pkg
+	genesisSink = chain.PackageAddress(pkg)
+	if genesisShareBps <= 0 {
+		genesisShareBps = 1100
+	}
+	chain.Emit("SetGenesis", "pkg", pkg)
+}
+
+func SetDiscountPusher(cur realm, pkg string) {
+	requireAdmin(cur)
+	pkg = strings.TrimSpace(pkg)
+	if pkg == "" || !strings.HasPrefix(pkg, "gno.land/r/") {
+		panic("factory: pusher pkg")
+	}
+	discountPusher = pkg
+	chain.Emit("SetDiscountPusher", "pkg", pkg)
+}
+
+func DiscountPusher() string {
+	requireInit()
+	return discountPusher
+}
+
+func NoteHolderDiscount(cur realm, owner string, bps int64) {
+	requireInit()
+	prev := cur.Previous()
+	if !prev.IsCode() {
+		panic("factory: not genesis")
+	}
+	from := prev.PkgPath()
+	ok := (genesisPkg != "" && from == genesisPkg) || (discountPusher != "" && from == discountPusher)
+	if !ok {
+		panic("factory: not genesis")
+	}
+	if bps < 0 {
+		panic("factory: discount")
+	}
+	who := strings.ToLower(strings.TrimSpace(owner))
+	if who == "" {
+		panic("factory: owner")
+	}
+	if bps == 0 {
+		holderDisc.Remove(who)
+		return
+	}
+	holderDisc.Set(who, bps)
 }
 
 func Register(cur realm, name, symbol, cover string, maxSupply int, mintPrice, royaltyBps int64) {
@@ -127,21 +266,11 @@ func Register(cur realm, name, symbol, cover string, maxSupply int, mintPrice, r
 	}
 	pkg := prev.PkgPath()
 	slug := lastElem(pkg)
-	if reserved.Has(slug) {
-		who := reserved.Get(slug).(address)
-		if creatorRlm.Address() != who {
-			panic("factory: reserved")
-		}
-		reserved.Remove(slug)
-		if pending.Has(pkg) {
-			pending.Remove(pkg)
-		}
-	} else {
-		if !pending.Has(pkg) {
-			panic("factory: launch fee")
-		}
-		pending.Remove(pkg)
+	res := mustReserve(slug)
+	if creatorRlm.Address() != res.who {
+		panic("factory: reserved")
 	}
+	reserved.Remove(slug)
 	register(pkg, creatorRlm.Address(), name, symbol, cover, maxSupply, mintPrice, royaltyBps)
 }
 
@@ -157,10 +286,43 @@ func Reserve(cur realm, slug string) {
 	if bySlug.Has(slug) || reserved.Has(slug) {
 		panic("factory: slug taken")
 	}
-	takeFactorySend(launchFee)
-	seenBank = bankUgnot()
-	reserved.Set(slug, cur.Previous().Address())
-	chain.Emit("Reserve", "slug", slug)
+	caller := cur.Previous().Address()
+	paid := reserveDue(caller)
+	takeFactorySend(paid)
+	reserved.Set(slug, &reservation{who: caller, paid: paid})
+	chain.Emit("Reserve", "slug", slug, "paid", strconv.FormatInt(paid, 10))
+}
+
+// ReserveDue is the ugnot Reserve will require from addr. The factory admin
+// (the wallet that called Init) pays 0. Everyone else pays LaunchFee.
+func ReserveDue(addr string) int64 {
+	requireInit()
+	who, ok := parseAddr(addr)
+	if !ok {
+		return launchFee
+	}
+	return reserveDue(who)
+}
+
+func reserveDue(caller address) int64 {
+	if caller == admin {
+		return 0
+	}
+	return launchFee
+}
+
+func parseAddr(raw string) (address, bool) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		var zero address
+		return zero, false
+	}
+	who := address(s)
+	if !who.IsValid() {
+		var zero address
+		return zero, false
+	}
+	return who, true
 }
 
 func CancelReserve(cur realm, slug string) {
@@ -169,23 +331,19 @@ func CancelReserve(cur realm, slug string) {
 		panic("factory: EOA only")
 	}
 	slug = strings.ToLower(strings.TrimSpace(slug))
-	if !reserved.Has(slug) {
-		panic("factory: not reserved")
-	}
-	who := reserved.Get(slug).(address)
-	if who != cur.Previous().Address() {
+	res := mustReserve(slug)
+	if res.who != cur.Previous().Address() {
 		panic("factory: not reserver")
 	}
 	if bySlug.Has(slug) {
 		panic("factory: already registered")
 	}
 	reserved.Remove(slug)
-	if launchFee > 0 {
+	if res.paid > 0 {
 		bk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
-		bk.SendCoins(self, who, chain.Coins{{Denom: nativeDenom, Amount: launchFee}})
+		bk.SendCoins(self, res.who, chain.Coins{{Denom: nativeDenom, Amount: res.paid}})
 	}
-	seenBank = bankUgnot()
-	chain.Emit("CancelReserve", "slug", slug)
+	chain.Emit("CancelReserve", "slug", slug, "paid", strconv.FormatInt(res.paid, 10))
 }
 
 func ReservedCreator(slug string) string {
@@ -194,7 +352,7 @@ func ReservedCreator(slug string) string {
 	if !reserved.Has(slug) {
 		return ""
 	}
-	return reserved.Get(slug).(address).String()
+	return reserved.Get(slug).(*reservation).who.String()
 }
 
 func takeFactorySend(want int64) {
@@ -276,12 +434,13 @@ func Withdraw(cur realm) {
 	requireAdmin(cur)
 	bk := banker.NewBanker(banker.BankerTypeRealmSend, cur)
 	ugnot := bk.GetCoins(self).AmountOf(nativeDenom)
-	if ugnot <= 0 {
+	locked := reservedPaid()
+	avail := ugnot - locked
+	if avail <= 0 {
 		panic("factory: no funds")
 	}
-	seenBank = 0
-	bk.SendCoins(self, admin, chain.Coins{{Denom: nativeDenom, Amount: ugnot}})
-	chain.Emit("Withdraw", "amount", strconv.FormatInt(ugnot, 10))
+	bk.SendCoins(self, admin, chain.Coins{{Denom: nativeDenom, Amount: avail}})
+	chain.Emit("Withdraw", "amount", strconv.FormatInt(avail, 10))
 }
 
 func TransferAdmin(cur realm, next address) {
@@ -302,6 +461,7 @@ func Render(_ string) string {
 	}
 	out := "# Bazaar factory\n\n"
 	out += "- launch fee: " + strconv.FormatInt(launchFee, 10) + " ugnot\n"
+	out += "- admin reserve: 0 ugnot\n"
 	out += "- collections: " + strconv.Itoa(bySlug.Size()) + "\n\n"
 	lines := ListCollections()
 	if lines == "" {
@@ -376,8 +536,21 @@ func requireAdmin(cur realm) {
 	}
 }
 
-func bankUgnot() int64 {
-	return banker.NewReadonlyBanker().GetCoins(Address()).AmountOf(nativeDenom)
+func mustReserve(slug string) *reservation {
+	v := reserved.Get(slug)
+	if v == nil {
+		panic("factory: not reserved")
+	}
+	return v.(*reservation)
+}
+
+func reservedPaid() int64 {
+	var n int64
+	reserved.Iterate("", "", func(_ string, value any) bool {
+		n += value.(*reservation).paid
+		return false
+	})
+	return n
 }
 
 func mustBySlug(slug string) *collection {

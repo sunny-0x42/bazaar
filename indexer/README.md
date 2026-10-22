@@ -3,8 +3,8 @@
 Read-only FastAPI reader for mint / list / buy / cancel / publicmint / drop.
 Does not replace the on-chain activity ring (cap 50). No keys. No writes.
 
-Default: Pearl RPC `https://rpc.pearl.testnets.gno.land` and GraphQL
-`https://indexer.pearl.testnets.gno.land/graphql/query`.
+Default for production: mainnet RPC `https://rpc.gno.land` and GraphQL
+`https://indexer.gno.land/graphql/query`. Filter `MsgCall.pkg_path` to the **collection** realm.
 
 ## Run
 

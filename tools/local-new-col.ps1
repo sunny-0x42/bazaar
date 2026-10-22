@@ -21,6 +21,13 @@ $src = Join-Path $root "gno.land\r\bazaar\col"
 $dst = Join-Path $root "gno.land\r\bazaar\c\$Slug"
 if (-not (Test-Path $src)) { throw "template missing: $src" }
 if (Test-Path $dst) { throw "already exists: $dst" }
+$colSrc = Get-Content (Join-Path $src "col.gno") -Raw -Encoding UTF8
+if ($colSrc -notmatch 'gno\.land/p/nt/grc721/v0') {
+  throw "col template must import genesis p/nt/grc721/v0 (Shown / Adena)"
+}
+if ($colSrc -notmatch 'func OwnerOf\(tid string\) \(address, error\)') {
+  throw "col template must export OwnerOf(tid string) (address, error) (Adena IIFE)"
+}
 
 New-Item -ItemType Directory -Force -Path $dst | Out-Null
 Get-ChildItem $src -File | Where-Object { $_.Name -eq "gnomod.toml" -or $_.Extension -eq ".gno" } | ForEach-Object {

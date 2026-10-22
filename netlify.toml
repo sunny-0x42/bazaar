@@ -1,0 +1,22 @@
+[build]
+  command = "npm --prefix web ci && npm --prefix web run build"
+  publish = "web/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Custom domain: https://bazaar.gnomi.fun
+[[redirects]]
+  from = "/api/wlist"
+  to = "/.netlify/functions/wlist"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

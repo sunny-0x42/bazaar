@@ -1,12 +1,10 @@
 # Collection page + activity (Next)
 
-## Realm `gno.land/r/bazaar/nft`
+## Collection activity
 
-On-chain ring (cap **50**, oldest dropped). `eval` can read it. Do not rely on ABCI logs.
+Factory `col` realms emit chain events (`List` / `Buy` / `Cancel` / `Mint` / `PublicMint`) but often have **no** `Activity()` tape. The UI fills Activity from the **mainnet indexer** (`docs/INDEXER.md`). Collection page has no Pool tab.
 
-Event line: `kind|id|slug|actor|price|name`
-
-kind: `mint` | `list` | `buy` | `cancel` | `drop` | `publicmint` | `offer` | `canceloffer` | `accept` | `depositpool` | `withdrawpool` | `depositnft` | `withdrawnft`
+kind: `mint` | `list` | `buy` | `cancel` | `publicmint` | `transfer` | `init`
 
 | Func | Notes |
 | --- | --- |
@@ -25,12 +23,8 @@ Collection page (Explore drill-down):
 - Hero: cover, name, slug, official Website / X / Discord, stats row
 - Stats: Floor Price, Top Offer, 7d Vol, 7d Sales, Market Cap, Listed / Supply, % Owners
 - 7d Vol / 7d Sales are the recent activity tape (cap 50), not a calendar window
-- Tabs **Items** | **Offers** | **Pool** | **Chart** | **Activity**
-- Offers: escrowed GNOT bid on an item; owner/seller Accept; bidder Cancel
-- Instant Sell: owner/seller takes the highest bid (`InstantSell`)
-- Sweep: one tx, up to 10 cheapest listed items (`Sweep`, `OriginSend` = sum of prices)
-- Pool: deposit/withdraw ugnot shares; deposit/withdraw unlisted NFTs (`DepositNftPool` / `WithdrawNftPool`)
+- Tabs **Items** | **Chart** | **Activity** (no Pool)
 - Activity: compact table (Event, Item, From, Price)
-- Preview catalog: 3 fake rows per collection (`mint` then `list`) so the tab is not blank without Pearl
+- Mainnet Explore does not load `/samples/catalog.json`
 
 English. No USD. No traits.

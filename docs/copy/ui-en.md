@@ -13,7 +13,7 @@ Do not add investment language, volume claims, or “floor will pump.”
 | `brand` | Bazaar |
 | `brand.chain` | gno.land |
 | `title` | Bazaar — NFT marketplace on gno.land |
-| `meta.description` | List and buy unique items at a fixed GNOT price on gno.land Pearl testnet. |
+| `meta.description` | List and buy unique items at a fixed GNOT price on gno.land mainnet. |
 
 ---
 
@@ -39,10 +39,12 @@ Do not add investment language, volume claims, or “floor will pump.”
 
 | Key | Copy |
 | --- | --- |
-| `footer.blurb` | NFT launchpad and secondary book on gno.land. Unique items, fixed GNOT prices, Adena wallet. |
-| `footer.not` | Not a DEX. Not a token pad. Not the Gnomies collection. |
-| `footer.primary` | Primary mint: 0 bps — all GNOT to creator |
-| `footer.secondary` | Secondary buy: 50 bps of the GNOT price |
+| `footer.blurb` | NFT launchpad and fixed-price book on gno.land. One collection is one realm. Unique GRC721 tokens, GNOT, Adena. |
+| `footer.primary` | Primary mint: 0 bps to creator |
+| `footer.secondary` | Secondary: 2% protocol + royalty 0–10% |
+| `footer.ecosystem.gnomi` | Gnomi.fun |
+| `footer.ecosystem.zdex` | zDex |
+| `footer.realm` | One collection = one Gno realm + g1 address |
 
 ---
 
@@ -52,7 +54,7 @@ Always visible.
 
 | Key | Copy |
 | --- | --- |
-| `banner.testnet` | Pearl testnet — test GNOT has no market value. |
+| `banner.mainnet` | gno.land mainnet (gnoland-1). GNOT has market value. |
 | `banner.local` | Local gnodev — Init the NFT realm, then Seed sample collections to buy and sell. |
 | `banner.pearl.undeployed` | Pearl testnet — this NFT realm is not deployed yet. Switch to Local to trade. |
 
@@ -64,7 +66,7 @@ Always visible.
 | --- | --- |
 | `wallet.connect` | Connect Adena |
 | `wallet.install` | Install Adena |
-| `wallet.wrongNetwork` | Adena is on the wrong network. Switch to Pearl (`pearl-1`). |
+| `wallet.wrongNetwork` | Adena is on the wrong network. Switch to Mainnet (`gnoland-1`). |
 | `wallet.wrongNetwork.named` | Adena is on {chainId}. Switch to {wantChainId} to buy or sell. |
 | `wallet.connected` | Wallet connected. |
 | `wallet.needConnect` | Connect Adena first. |
@@ -87,7 +89,7 @@ Always visible.
 | `explore.empty.search.title` | No matches |
 | `explore.empty.search` | Nothing matches that search. |
 | `explore.empty.search.cta` | Clear search |
-| `explore.realmMissing` | Realm not on Pearl yet. Showing sample collections. |
+| `explore.empty` | The market is open. Launch a collection on bazaarv2. |
 | `explore.readError` | Could not read listings. |
 
 Collection page (Explore).
@@ -109,7 +111,7 @@ Collection page (Explore).
 | --- | --- |
 | `launch.title` | Launch |
 | `launch.lead` | Fixed-price collection drops. Mint pays the drop price in GNOT. |
-| `launch.realm` | Each collection is its own realm. Pearl: ask Bazaar to addpkg, then Initialize collection. Local: `/local/new-col` then Initialize collection. |
+| `launch.realm` | Each collection is its own realm. Mainnet: Bazaar addpkg, Reserve LaunchFee on bazaarv2, then Initialize. |
 | `launch.lead.preview` | Sample drops — preview. Mint pays the drop price in GNOT. |
 | `launch.empty` | No drops yet. Create one below. |
 | `launch.create` | Create drop |
@@ -123,7 +125,11 @@ Collection page (Explore).
 | Key | Copy |
 | --- | --- |
 | `sell.title` | Sell |
-| `sell.lead` | List an owned unlisted item. Listing escrows it in the realm. |
+| `sell.lead` | Listing moves this NFT to the collection realm. It leaves Adena until you cancel or a buyer pays. |
+| `sell.lead.update` | Change the GNOT price. The NFT stays in the collection realm until you cancel or a buyer pays. |
+| `list.escrow.hint` | You listed this item. It is in realm escrow, so it leaves Adena until you cancel or a buyer pays. |
+| `list.sell.hint` | Sell lists at a fixed GNOT price and moves the NFT out of Adena until cancel or sale. |
+| `profile.listed.hint` | Listed items live on Bazaar. They leave Adena until you cancel or a buyer pays. |
 | `sell.item` | Item |
 | `sell.price` | Price (GNOT) |
 | `sell.empty.disconnected.title` | Connect Adena |
@@ -155,11 +161,11 @@ Collection page (Explore).
 | Key | Copy |
 | --- | --- |
 | `settings.title` | Settings |
-| `settings.lead` | After Pearl addpkg, paste the deployed hub and NFT paths. Local gnodev keeps the defaults. |
+| `settings.lead` | gno.land mainnet. Factory bazaarv2. |
 | `settings.factory` | Factory package path |
-| `settings.factory.hint` | Optional. Live Launch uses nftv7. Leave empty unless testing per-realm collections locally (gno.land/r/bazaar/factory). |
+| `settings.factory.hint` | Mainnet factory …/bazaar/bazaarv2. |
 | `settings.empty.title` | No NFT path |
-| `settings.empty` | Paste the hub and NFT paths after Pearl addpkg. |
+| `settings.empty` | Factory path defaults to bazaarv2. |
 | `settings.empty.disconnected.title` | Connect Adena |
 | `settings.empty.disconnected` | Connect Adena to seed sample collections. |
 | `settings.seed` | Seed sample collections |
@@ -218,7 +224,7 @@ Header link only when the connected address equals `Admin()`. Not in BottomNav. 
 
 | Key | Copy |
 | --- | --- |
-| `fee.line` | 0.50% protocol fee |
+| `fee.line` | 2% protocol fee (admin) |
 | `fee.included` | You pay ({fee} included) |
 | `fee.split` | Buyer pays {price} GNOT. Protocol fee {fee} GNOT. You receive {net} GNOT. |
 | `fee.buyerPays` | Buyer pays |
@@ -241,7 +247,7 @@ Header link only when the connected address equals `Admin()`. Not in BottomNav. 
 
 | Key | Copy |
 | --- | --- |
-| `err.wrongNetwork` | Switch Adena to Pearl (`pearl-1`). |
+| `err.wrongNetwork` | Switch Adena to Mainnet (`gnoland-1`). |
 | `err.needNft` | Set a valid NFT package path in Settings. |
 | `err.generic` | Something went wrong. Try again. |
 | `err.selfBuy` | This is your listing. Connect a different Adena account to buy, or Cancel. |
@@ -266,6 +272,6 @@ Keep small; operators only.
 
 - Actions: list, buy, cancel. One sentence each.
 - Name the asset: item. Name the group: collection or drop. Name the unit: GNOT.
-- Disclose Pearl. Test GNOT has no market value.
-- Do not say DEX, swap, pool, or “next OpenSea.”
+- Disclose mainnet. GNOT has market value.
+- Do not say DEX, swap, or “next OpenSea.” Collection UI has no Pool tab.
 - Drop is a Launch collection, not a slogan.

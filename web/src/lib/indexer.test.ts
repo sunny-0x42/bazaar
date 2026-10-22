@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchActivity, mapActivityJson } from "./indexer";
+import {
+  adenaIndexerOrigin,
+  callerPublicMintHeights,
+  collectionPublicMintHeights,
+  fetchActivity,
+  fetchPkgActivity,
+  indexerUrl,
+  mapActivityJson,
+  mapIndexerTransactions,
+} from "./indexer";
 
 describe("mapActivityJson", () => {
   it("maps kind|id|slug|actor|price|name from a JSON array", () => {
@@ -138,5 +147,198 @@ describe("fetchActivity", () => {
   it("returns null when fetch throws", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     await expect(fetchActivity({ slug: "stones" })).resolves.toBeNull();
+  });
+});
+
+describe("mapIndexerTransactions", () => {
+  const pkg = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/test";
+
+  it("maps List and PublicMint events and skips session txs", () => {
+    const parsed = mapIndexerTransactions(
+      {
+        data: {
+          getTransactions: [
+            {
+              block_height: 10,
+              messages: [{ typeUrl: "create_session", value: {} }],
+              response: { events: [] },
+            },
+            {
+              block_height: 20,
+              messages: [
+                {
+                  typeUrl: "exec",
+                  value: { caller: "g1seller", func: "List", pkg_path: pkg, args: ["1", "1000000"], send: "" },
+                },
+              ],
+              response: {
+                events: [
+                  { type: "List", pkg_path: pkg, attrs: [{ key: "id", value: "1" }, { key: "seller", value: "g1seller" }, { key: "price", value: "1000000" }] },
+                ],
+              },
+            },
+            {
+              block_height: 15,
+              messages: [
+                {
+                  typeUrl: "exec",
+                  value: { caller: "g1minter", func: "PublicMint", pkg_path: pkg, args: null, send: "" },
+                },
+              ],
+              response: {
+                events: [{ type: "PublicMint", pkg_path: pkg, attrs: [{ key: "id", value: "1" }] }],
+              },
+            },
+          ],
+        },
+      },
+      pkg,
+      "test",
+    );
+    expect(parsed.map((r) => r.kind)).toEqual(["list", "publicmint"]);
+    expect(parsed[0]).toMatchObject({ id: "1", actor: "g1seller", price: 1_000_000, slug: "test", source: "indexed" });
+    expect(parsed[1]).toMatchObject({ id: "1", actor: "g1minter", kind: "publicmint" });
+  });
+
+  it("maps an Offer by bidder and amount", () => {
+    const parsed = mapIndexerTransactions(
+      {
+        data: {
+          getTransactions: [
+            {
+              messages: [
+                { value: { caller: "g1bid", func: "Offer", pkg_path: pkg, send: "500000ugnot" } },
+              ],
+              response: {
+                events: [
+                  {
+                    type: "Offer",
+                    pkg_path: pkg,
+                    attrs: [
+                      { key: "id", value: "2" },
+                      { key: "bidder", value: "g1bid" },
+                      { key: "amount", value: "500000" },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      pkg,
+      "test",
+    );
+    expect(parsed).toMatchObject([{ kind: "offer", id: "2", actor: "g1bid", price: 500_000 }]);
+  });
+});
+
+describe("fetchPkgActivity", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function listTx(pkg: string) {
+    return {
+      messages: [
+        { value: { caller: "g1seller", func: "List", pkg_path: pkg, args: ["1", "1000000"], send: "" } },
+      ],
+      response: {
+        events: [
+          {
+            type: "List",
+            pkg_path: pkg,
+            attrs: [
+              { key: "id", value: "1" },
+              { key: "seller", value: "g1seller" },
+              { key: "price", value: "1000000" },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  it("asks for the latest height, then only the recent block window", async () => {
+    const pkg = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/window";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { query?: string; variables?: { after?: number } };
+      if (String(body.query || "").includes("latestBlockHeight")) {
+        return { ok: true, json: async () => ({ data: { latestBlockHeight: 100_000 } }) };
+      }
+      expect(body.variables?.after).toBe(80_000);
+      return { ok: true, json: async () => ({ data: { getTransactions: [listTx(pkg)] } }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const rows = await fetchPkgActivity({ pkg, slug: "window", network: "mainnet" });
+    expect(rows).toMatchObject([{ kind: "list", id: "1", price: 1_000_000 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const again = await fetchPkgActivity({ pkg, slug: "window", network: "mainnet" });
+    expect(again).toEqual(rows);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null when the height read fails and does not scan all history", async () => {
+    const pkg = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/failheight";
+    const fetchMock = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchPkgActivity({ pkg, slug: "fail", network: "mainnet" })).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("callerPublicMintHeights", () => {
+  const pkg = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/bazaar/c/test";
+
+  it("counts each PublicMint message in a batch and skips other wallets", () => {
+    const heights = callerPublicMintHeights(
+      {
+        data: {
+          getTransactions: [
+            {
+              block_height: 40,
+              messages: [
+                { value: { caller: "g1mine", func: "PublicMint", pkg_path: pkg } },
+                { value: { caller: "g1mine", func: "PublicMint", pkg_path: pkg } },
+                { value: { caller: "g1other", func: "PublicMint", pkg_path: pkg } },
+              ],
+            },
+            {
+              block_height: 30,
+              messages: [{ value: { caller: "g1mine", func: "List", pkg_path: pkg } }],
+            },
+          ],
+        },
+      },
+      pkg,
+      "g1mine",
+    );
+    expect(heights).toEqual([40, 40]);
+  });
+
+  it("counts every wallet when splitting the collection rounds", () => {
+    const raw = {
+      data: {
+        getTransactions: [
+          {
+            block_height: 40,
+            messages: [
+              { value: { caller: "g1mine", func: "PublicMint", pkg_path: pkg } },
+              { value: { caller: "g1other", func: "PublicMint", pkg_path: pkg } },
+              { value: { caller: "g1mine", func: "List", pkg_path: pkg } },
+            ],
+          },
+        ],
+      },
+    };
+    expect(collectionPublicMintHeights(raw, pkg)).toEqual([40, 40]);
+  });
+});
+
+describe("adenaIndexerOrigin", () => {
+  it("is the host Adena stores, without the graphql path", () => {
+    expect(adenaIndexerOrigin("onyx")).toBe("https://indexer.onyx.testnets.gno.land");
+    expect(indexerUrl("onyx")).toBe(`${adenaIndexerOrigin("onyx")}/graphql/query`);
+    expect(adenaIndexerOrigin("local")).toBe("");
   });
 });

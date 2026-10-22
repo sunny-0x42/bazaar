@@ -11,12 +11,18 @@ import {
   type CollectionMarket,
 } from "../lib/catalog";
 import {
+  BAZAAR_GENS_MINT_SLUG,
+  isPkgPath,
   isRealmUnavailable,
   itemRowKey,
-  liveTradeRows,
+  networkById,
+  sameAddr,
+  parseItems,
+  scopeLiveTape,
   type Activity,
   type ChainCollection,
   type Item,
+  type NetworkId,
   type OfferRow,
   type PoolInfo,
   type PoolNft,
@@ -24,7 +30,12 @@ import {
   topOfferFor,
 } from "../lib/chain";
 import { activityToPoints, fetchChart, listedPricesToPoints, pointsForItem, type ChartPoint } from "../lib/chart";
+import { ITEM_LINE_WAVE, readItemBookCache } from "../lib/itembook";
+import { indexLiveArt, liveArtFor, liveArtKey, missingLiveArt } from "../lib/liveart";
+import { evalExpr } from "../lib/wallets";
+import type { MintRoundCard } from "../lib/mintrounds";
 import { FeaturedCollections } from "./FeaturedCollections";
+import { HomePulse } from "./HomePulse";
 import { CollectionTable, type MarketSortKey } from "./CollectionTable";
 import { LiveTicker } from "./LiveTicker";
 import { CollectionPage } from "./CollectionPage";
@@ -35,10 +46,13 @@ import type { Tab } from "./types";
 
 type Props = {
   items: Item[];
+  holdings?: Item[];
   chainCollections: ChainCollection[];
   collectionItems: Item[] | null;
   collectionActivity: Activity[] | null;
   homeActivity?: Activity[] | null;
+  /** Public slugs on the factory this UI is using. Null means the legacy book. */
+  liveSlugs?: string[] | null;
   featuredSlugs?: string[];
   slug: string;
   onSlug: (slug: string) => void;
@@ -56,7 +70,7 @@ type Props = {
   onConnect: () => void;
   wallet?: string;
   itemId?: string;
-  onItemId?: (id: string) => void;
+  onItemId?: (id: string, slug?: string) => void;
   collectionOffers?: OfferRow[];
   collectionPool?: PoolInfo | null;
   collectionPoolNfts?: PoolNft[];
@@ -74,18 +88,30 @@ type Props = {
   cart?: Item[];
   onCart?: (item: Item) => void;
   onReveal?: (id: string) => void;
+  onSyncNft?: (item: Item) => void;
   onOpenMint?: (slug: string) => void;
+  onRevealCollection?: (slug: string) => void;
+  collectionHidden?: boolean;
+  mintRounds?: MintRoundCard[];
   hasOffers?: boolean;
   hasPool?: boolean;
   onOpenProfile?: (addr: string) => void;
+  /** Mainnet: never fall back to /samples/catalog.json (Pearl preview collections). */
+  factoryOnly?: boolean;
+  networkId?: NetworkId;
+  moreCount?: number;
+  moreBusy?: boolean;
+  onLoadMore?: () => void;
 };
 
 export function Explore({
   items,
+  holdings = [],
   chainCollections,
   collectionItems,
   collectionActivity,
   homeActivity,
+  liveSlugs = null,
   featuredSlugs = [],
   slug,
   onSlug,
@@ -121,10 +147,19 @@ export function Explore({
   cart = [],
   onCart,
   onReveal,
+  onSyncNft,
   onOpenMint,
+  onRevealCollection,
+  collectionHidden = false,
+  mintRounds = [],
   hasOffers = true,
   hasPool = true,
   onOpenProfile,
+  factoryOnly = false,
+  networkId = "mainnet",
+  moreCount = 0,
+  moreBusy = false,
+  onLoadMore,
 }: Props) {
   const [selected, setSelected] = useState<Item | null>(null);
   const [catalog, setCatalog] = useState<CatalogCollection[]>([]);
@@ -132,8 +167,23 @@ export function Explore({
   const [apiPoints, setApiPoints] = useState<ChartPoint[] | null>(null);
   const [tableSort, setTableSort] = useState<MarketSortKey>("vol");
   const [tableDir, setTableDir] = useState<"asc" | "desc">("desc");
+  const [liveImages, setLiveImages] = useState<Record<string, { image: string; name: string }>>({});
+
+  const factoryMode = useMemo(
+    () => factoryOnly || chainCollections.some((c) => !!c.pkg),
+    [factoryOnly, chainCollections],
+  );
 
   useEffect(() => {
+    if (factoryMode) {
+      setCatalog([]);
+      setCatalogReady(true);
+      return;
+    }
+    if (loading) {
+      setCatalogReady(false);
+      return;
+    }
     let live = true;
     fetch("/samples/catalog.json")
       .then((r) => {
@@ -152,13 +202,12 @@ export function Explore({
     return () => {
       live = false;
     };
-  }, []);
+  }, [factoryMode, loading]);
 
-  const collections = useMemo(
-    () => buildExploreCollections(catalog, chainCollections, items),
-    [catalog, chainCollections, items],
-  );
-  const factoryMode = useMemo(() => chainCollections.some((c) => !!c.pkg), [chainCollections]);
+  const collections = useMemo(() => {
+    if (loading && chainCollections.length === 0) return [];
+    return buildExploreCollections(factoryMode ? [] : catalog, chainCollections, items);
+  }, [loading, factoryMode, catalog, chainCollections, items]);
 
   const q = query.trim().toLowerCase();
   const visibleCollections = useMemo(() => {
@@ -203,14 +252,73 @@ export function Explore({
     const source =
       homeActivity && homeActivity.length > 0
         ? homeActivity
-        : collectionActivity && collectionActivity.length > 0
-          ? collectionActivity
-          : factoryMode
-            ? []
-            : catalog.flatMap((col) => previewActivityFor(col));
-    const trades = liveTradeRows(source, 24);
+        : liveSlugs
+          ? []
+          : collectionActivity && collectionActivity.length > 0
+            ? collectionActivity
+            : factoryMode
+              ? []
+              : catalog.flatMap((col) => previewActivityFor(col));
+    const trades = scopeLiveTape(source, liveSlugs, 24);
     return trades.length > 0 ? trades : null;
-  }, [homeActivity, collectionActivity, catalog, factoryMode]);
+  }, [homeActivity, collectionActivity, catalog, factoryMode, liveSlugs]);
+  const liveKnown = useMemo(() => {
+    const known: Item[] = [...items, ...holdings];
+    for (const col of chainCollections) {
+      const pkg = col.pkg || "";
+      if (!pkg) continue;
+      const cached = readItemBookCache(pkg);
+      if (!cached) continue;
+      for (const row of cached.rows) known.push(row.collection ? row : { ...row, collection: col.slug });
+    }
+    if (!factoryMode) {
+      for (const col of catalog) known.push(...previewItemsFor(col));
+    }
+    return indexLiveArt(known);
+  }, [items, holdings, chainCollections, catalog, factoryMode]);
+  useEffect(() => {
+    const rows = recent || [];
+    const ready: Record<string, { image: string; name: string }> = {};
+    for (const row of rows) {
+      const hit = liveArtFor(row, liveKnown);
+      if (hit?.image) ready[liveArtKey(row)] = hit;
+    }
+    setLiveImages(ready);
+    const missing = missingLiveArt(rows, liveKnown);
+    if (missing.length === 0) return;
+    const rpc = networkById(networkId).rpcUrl;
+    const pkgOf = new Map(chainCollections.map((col) => [col.slug.trim().toLowerCase(), (col.pkg || "").trim()]));
+    let stop = false;
+    void (async () => {
+      const jobs = missing
+        .map((row) => ({ ...row, pkg: pkgOf.get(row.slug) || "" }))
+        .filter((row) => isPkgPath(row.pkg));
+      for (let i = 0; i < jobs.length; i += ITEM_LINE_WAVE) {
+        const wave = jobs.slice(i, i + ITEM_LINE_WAVE);
+        const found = await Promise.all(
+          wave.map(async (job) => {
+            try {
+              const item = parseItems(await evalExpr(rpc, job.pkg, `ItemLine(${Number(job.id)})`))[0];
+              const image = item?.image?.trim() || "";
+              if (!image) return null;
+              return [job.key, { image, name: item?.name?.trim() || "" }] as const;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        if (stop) return;
+        const add: Record<string, { image: string; name: string }> = {};
+        for (const hit of found) {
+          if (hit) add[hit[0]] = hit[1];
+        }
+        if (Object.keys(add).length > 0) setLiveImages((prev) => ({ ...prev, ...add }));
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [recent, liveKnown, chainCollections, networkId]);
   const active = collections.find((c) => c.slug === slug) ?? null;
   const collectionRows = useMemo(() => {
     if (!slug) return [];
@@ -259,32 +367,33 @@ export function Explore({
 
   const pool = useMemo(() => {
     const byKey = new Map<string, Item>();
-    for (const row of [...collectionRows, ...items, ...listedPool]) {
+    for (const row of [...items, ...listedPool, ...holdings, ...collectionRows]) {
       byKey.set(itemRowKey(row), row);
-      if (row.id) byKey.set(row.id, row);
     }
     return byKey;
-  }, [collectionRows, items, listedPool]);
+  }, [collectionRows, items, listedPool, holdings]);
 
   useEffect(() => {
     if (!itemId) {
       setSelected((cur) => (cur && cur.id ? null : cur));
       return;
     }
-    const found = pool.get(itemId);
-    setSelected(found ?? null);
-  }, [itemId, pool]);
+    const match = [...collectionRows, ...holdings, ...items].find(
+      (row) => row.id === itemId && (!slug || !row.collection || row.collection === slug),
+    );
+    setSelected(match || pool.get(itemId) || null);
+  }, [itemId, pool, slug, collectionRows, holdings, items]);
 
   function openItem(item: Item) {
-    if (item.id && onItemId) onItemId(item.id);
+    if (item.id && onItemId) onItemId(item.id, item.collection);
     else setSelected(item);
   }
 
   const live = selected
-    ? pool.get(itemRowKey(selected)) || (selected.id ? pool.get(selected.id) : undefined) || selected
+    ? pool.get(itemRowKey(selected)) || selected
     : null;
   const missing = chainNote && isRealmUnavailable(chainNote);
-  const showHomeSkeleton = !catalogReady && collections.length === 0;
+  const showHomeSkeleton = (loading || !catalogReady) && collections.length === 0;
 
   function onTableSort(key: MarketSortKey) {
     if (key === tableSort) setTableDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -302,6 +411,7 @@ export function Explore({
           slug={slug}
           items={collectionRows}
           activity={collectionEvents}
+          activityLoading={Boolean(active?.pkg) && collectionActivity == null}
           chartPoints={chartPoints}
           chartPreview={chartPreview}
           query={query}
@@ -333,31 +443,61 @@ export function Explore({
           cart={cart}
           onCart={onCart}
           onReveal={onReveal}
+          onSyncNft={onSyncNft}
           onOpenMint={onOpenMint}
+          onRevealCollection={
+            onRevealCollection && slug ? () => onRevealCollection(slug) : undefined
+          }
+          sealed={collectionHidden}
+          creatorAddr={chainCollections.find((col) => col.slug === slug)?.creator || ""}
+          mintRounds={mintRounds}
           hasOffers={hasOffers}
           hasPool={hasPool}
+          loading={collectionItems === null}
+          moreCount={moreCount}
+          moreBusy={moreBusy}
+          onLoadMore={onLoadMore}
         />
       ) : (
         <>
-          <header className="page-head">
-            <h1>Explore</h1>
-            <p className="muted">Live collections. Each has its own realm. Mint in GNOT.</p>
+          <header className="explore-hero">
+            <div className="explore-hero-copy">
+              <p className="explore-kicker">
+                {networkId === "onyx"
+                  ? "Onyx · onyx-1"
+                  : networkId === "pearl"
+                    ? "Pearl · pearl-1"
+                    : networkId === "local"
+                      ? "Local · gnodev"
+                      : "gno.land · Mainnet"}
+              </p>
+              <h1>Discover NFTs</h1>
+              <p className="explore-lead">
+                Fixed-price collections on their own realms. Mint and trade in GNOT.
+              </p>
+              <div className="explore-hero-actions">
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={() => onOpenMint?.(BAZAAR_GENS_MINT_SLUG)}
+                >
+                  Bazaar Gens · 1,111
+                </button>
+                <button className="btn" type="button" onClick={() => onOpenTab("create")}>
+                  Launch a collection
+                </button>
+              </div>
+            </div>
+            <HomePulse collections={chainCollections} networkId={networkId} />
           </header>
 
           {chainNote && !(factoryMode && missing) ? (
-            <p className="muted chain-note">
-              {missing
-                ? "Realm not on Pearl yet. Showing sample collections."
-                : chainNote}{" "}
-              <button className="text-btn" type="button" onClick={() => onOpenTab("settings")}>
-                Open Settings
-              </button>
-            </p>
+            <p className="muted chain-note">{chainNote}</p>
           ) : null}
 
           {showHomeSkeleton ? <SkeletonGrid count={3} /> : null}
 
-          {!showHomeSkeleton && !slug && recent && recent.length > 0 ? <LiveTicker rows={recent} /> : null}
+          {!showHomeSkeleton && !slug && recent && recent.length > 0 ? <LiveTicker rows={recent} images={liveImages} /> : null}
 
           {!showHomeSkeleton && !q && featuredLaunchpads.length > 0 ? (
             <FeaturedCollections
@@ -405,11 +545,11 @@ export function Explore({
 
           {!showHomeSkeleton && catalogReady && collections.length === 0 ? (
             <EmptyState
-              title="No collections"
-              body="Create a drop, then list items at a fixed GNOT price."
+              title="The market is open"
+              body="No public collections on this factory yet. Launch a drop, mint, then list at a fixed GNOT price."
             >
               <button className="btn primary" type="button" onClick={() => onOpenTab("create")}>
-                Launch
+                Launch a collection
               </button>
             </EmptyState>
           ) : null}
@@ -423,7 +563,7 @@ export function Explore({
           connected={connected}
           blocked={blocked}
           busy={busy}
-          owned={!!wallet && (live.owner === wallet || live.seller === wallet)}
+          owned={!!wallet && (sameAddr(live.owner, wallet) || sameAddr(live.seller, wallet))}
           onClose={() => {
             setSelected(null);
             onItemId?.("");
@@ -446,6 +586,7 @@ export function Explore({
           activity={collectionEvents.length ? collectionEvents : tape}
           onCart={onCart}
           inCart={cart.some((c) => itemRowKey(c) === itemRowKey(live))}
+          onSync={onSyncNft}
         />
       ) : null}
     </section>

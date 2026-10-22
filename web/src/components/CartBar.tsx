@@ -34,7 +34,7 @@ export function CartBar({ items, connected, busy, onRemove, onClear, onCheckout,
     try {
       const res = await onCheckout();
       if (res.ok && res.preview) {
-        setStatus("Done. Preview listings are not on nftv7, so nothing was swept on-chain.");
+        setStatus("Done. Preview listings are not on-chain, so nothing was bought.");
         window.setTimeout(() => onClear(), 2200);
         return;
       }
@@ -83,8 +83,8 @@ export function CartBar({ items, connected, busy, onRemove, onClear, onCheckout,
         {previewN > 0 ? (
           <p className="cart-sheet-hint">
             {liveN > 0
-              ? `${previewN} preview item${previewN === 1 ? "" : "s"} skipped on-chain. ${liveN} live item${liveN === 1 ? "" : "s"} will Sweep.`
-              : "Preview listings only. Checkout will not send a Sweep tx."}
+              ? `${previewN} preview item${previewN === 1 ? "" : "s"} skipped. ${liveN} live item${liveN === 1 ? "" : "s"}: one Buy each in Adena.`
+              : "Preview listings only. Checkout will not send a Buy."}
           </p>
         ) : null}
         {status ? <p className="cart-sheet-status">{status}</p> : null}

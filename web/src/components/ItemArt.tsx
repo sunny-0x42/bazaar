@@ -7,12 +7,15 @@ type Props = {
   image: string;
   size?: number;
   alt?: string;
+  /** Hero and mint covers. Grid cards stay lazy so the first screen is not blocked on every image. */
+  priority?: boolean;
 };
 
-export function ItemArt({ name, image, size, alt = "" }: Props) {
+export function ItemArt({ name, image, size, alt = "", priority = false }: Props) {
   const url = artSrc(image);
   const [brokenFor, setBrokenFor] = useState("");
   const show = isArtSrc(image.trim()) && brokenFor !== url;
+  const loading = priority ? "eager" : "lazy";
 
   if (size) {
     return show ? (
@@ -22,6 +25,8 @@ export function ItemArt({ name, image, size, alt = "" }: Props) {
         alt={alt}
         width={size}
         height={size}
+        loading={loading}
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setBrokenFor(url)}
       />
@@ -33,7 +38,14 @@ export function ItemArt({ name, image, size, alt = "" }: Props) {
   return (
     <div className="item-art">
       {show ? (
-        <img src={url} alt={alt} referrerPolicy="no-referrer" onError={() => setBrokenFor(url)} />
+        <img
+          src={url}
+          alt={alt}
+          loading={loading}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setBrokenFor(url)}
+        />
       ) : (
         <TokenMark symbol={name} fill />
       )}

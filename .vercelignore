@@ -1,0 +1,7 @@
+deploy/
+.env.deploy
+web/tmp-qa/
+web/tmp-*
+.gno/
+*.exe
+node_modules/
