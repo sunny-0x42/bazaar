@@ -64,6 +64,7 @@ import {
   tokenURIExpr,
   parseFactoryCollectionLines,
   isPublicFactorySlug,
+  isLaunchpadMint,
   parseHash,
   routeRaw,
   sharePath,
@@ -109,7 +110,7 @@ import { adenaIndexerOrigin, fetchActivity, fetchCallerPublicMintHeights, fetchC
 import { emptyProfile, loadLocalProfile, parseProfileLine, saveLocalProfile, type UserProfile } from "./lib/userProfile";
 import { chunkDropLines, gasFeeUgnot, packLaunchTxs, skipLaunchSetup, txGasWanted, type LaunchMsg } from "./lib/launchtx";
 import { ITEM_BOOK_CAP, ITEM_LINE_WAVE, mergeBookItems, missingItemIds, nextItemIds, nextPageSize, readItemBookCache, writeItemBookCache } from "./lib/itembook";
-import { collectionShowsRounds, countMintsInHeightRange, firstBlockAtOrAfter, mergeMintedCount, mintLookbackHeight, mintRoundCards, resolveMintPhase, splitPhaseMints, type MintQtyRound, type MintRoundCard } from "./lib/mintrounds";
+import { collectionShowsRounds, countMintsInHeightRange, firstBlockAtOrAfter, launchpadEnded, mergeMintedCount, mintLookbackHeight, mintRoundCards, resolveMintPhase, splitPhaseMints, type MintQtyRound, type MintRoundCard } from "./lib/mintrounds";
 import { connectAdena, disconnectAdena, doContractCall, doContractCalls, evalExpr, fetchBankUgnot, fetchBlockUnix, fetchChainHead, queryGasPrice, queryPkgMeta, readBankUgnot } from "./lib/wallets";
 import { bulkMessages, listGasWanted, packListTxs } from "./lib/bulklist";
 import type { ListRequest } from "./components/Sell";
@@ -150,6 +151,33 @@ function readWlClose(pkg: string, wlEnd: number): number | null {
 function writeWlClose(pkg: string, wlEnd: number, n: number): void {
   try {
     localStorage.setItem(wlCloseStorageKey(pkg, wlEnd), String(Math.floor(n)));
+  } catch {
+    /* private mode */
+  }
+}
+
+function readFactoryCache(key: string): ChainCollection[] {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (row): row is ChainCollection =>
+        !!row &&
+        typeof row === "object" &&
+        typeof (row as ChainCollection).slug === "string" &&
+        typeof (row as ChainCollection).name === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeFactoryCache(key: string, cols: ChainCollection[]): void {
+  try {
+    if (cols.length < 1) return;
+    sessionStorage.setItem(key, JSON.stringify(cols));
   } catch {
     /* private mode */
   }
@@ -279,6 +307,7 @@ export function App() {
   const peerBySlugRef = useRef(peerBySlug);
   peerBySlugRef.current = peerBySlug;
   const collectionSlugRef = useRef("");
+  collectionSlugRef.current = collectionSlug.trim().toLowerCase();
   const collectionItemsRef = useRef<{ slug: string; rows: Item[] }>({ slug: "", rows: [] });
   const bookProgressRef = useRef<{ slug: string; through: number; minted: number }>({ slug: "", through: 0, minted: 0 });
   const bookJobRef = useRef<{
@@ -289,6 +318,7 @@ export function App() {
     minted: number;
     have: Set<string>;
     busy: boolean;
+    stop: boolean;
     publish: (rows: Item[]) => void;
   } | null>(null);
   const [collectionBook, setCollectionBook] = useState({ slug: "", through: 0, minted: 0, loading: false });
@@ -302,6 +332,8 @@ export function App() {
   const [homeActivity, setHomeActivity] = useState<Activity[] | null>(null);
   const [liveSlugs, setLiveSlugs] = useState<string[] | null>(null);
   const [featuredSlugs, setFeaturedSlugs] = useState<string[]>([]);
+  const [launchEnded, setLaunchEnded] = useState<ReadonlySet<string>>(() => new Set());
+  const [launchKnown, setLaunchKnown] = useState(false);
   const [chainNote, setChainNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -431,26 +463,35 @@ export function App() {
     if (nftPath !== nft) setNft(nftPath);
     const factoryPath = isPkgPath(factory) ? normalizePkgPath(factory) : "";
 
-    const factoryTask = (async () => {
-      const paths = [
-        factoryPath,
-        remote ? FACTORY_PKG_MAINNET_V2 : "",
-        remote ? FACTORY_PKG_MAINNET_V1 : "",
-        remote ? FACTORY_PKG_MAINNET : "",
-      ].filter((p, i, all) => p && isPkgPath(p) && all.indexOf(p) === i);
-      const packs = await Promise.all(
-        paths.map((p) =>
-          evalExpr(rpc, p, "ListCollections()")
-            .then((raw) => parseFactoryCollectionLines(raw, { includeHidden: remote }))
-            .catch(() => [] as ChainCollection[]),
-        ),
-      );
+    const paths = [
+      factoryPath,
+      remote ? FACTORY_PKG_MAINNET_V2 : "",
+      remote ? FACTORY_PKG_MAINNET_V1 : "",
+      remote ? FACTORY_PKG_MAINNET : "",
+    ].filter((p, i, all) => p && isPkgPath(p) && all.indexOf(p) === i);
+    const readFactory = (p: string) =>
+      evalExpr(rpc, p, "ListCollections()")
+        .then((raw) => parseFactoryCollectionLines(raw, { includeHidden: remote }))
+        .catch(() => [] as ChainCollection[]);
+    const tasks = paths.map(readFactory);
+    const cacheKey = `bazaar.cols.v1:${net.id}:${factoryPath}`;
+    const packOf = (packs: ChainCollection[][]) => {
       const bySlug = new Map<string, ChainCollection>();
       for (const row of packs.flat()) bySlug.set(row.slug, row);
-      const current = factoryPath && paths[0] === factoryPath ? packs[0] || [] : [];
-      const live = current.filter((col) => isPublicFactorySlug(col.slug)).map((col) => col.slug);
+      const primaryRows = factoryPath && paths[0] === factoryPath ? packs[0] || [] : [];
+      const live = primaryRows.filter((col) => isPublicFactorySlug(col.slug)).map((col) => col.slug);
       return { cols: [...bySlug.values()], liveSlugs: factoryPath ? live : null };
-    })();
+    };
+    const cached = readFactoryCache(cacheKey);
+    if (cached.length > 0 && current()) {
+      const cachedPublic = cached.filter((col) => isPublicFactorySlug(col.slug));
+      if (cachedPublic.length > 0) {
+        setDeskCollections(cached.filter((col) => col.pkg && isPkgPath(col.pkg)));
+        setChainCollections(cachedPublic);
+        setFeaturedSlugs(cachedPublic.map((col) => col.slug));
+        setLoading(false);
+      }
+    }
     const openTask = isPkgPath(nftPath)
       ? loadListOpen(rpc, nftPath)
           .then((rows) => ({ rows, error: "" }))
@@ -460,7 +501,26 @@ export function App() {
           }))
       : Promise.resolve({ rows: [] as Item[], error: "Set a valid NFT package path in Settings." });
 
-    const [factoryPack, openResult] = await Promise.all([factoryTask, openTask]);
+    const primaryRows = await (tasks[0] ?? Promise.resolve([] as ChainCollection[]));
+    if (!current()) return;
+    const primaryPack = packOf([primaryRows]);
+    const primaryPublic = primaryPack.cols.filter((col) => isPublicFactorySlug(col.slug));
+    if (primaryPublic.length > 0) {
+      setLiveSlugs(primaryPack.liveSlugs);
+      setDeskCollections(primaryPack.cols.filter((col) => col.pkg && isPkgPath(col.pkg)));
+      setChainCollections(primaryPublic);
+      setFeaturedSlugs(primaryPublic.map((col) => col.slug));
+      setLoading(false);
+      if (collectionSlugRef.current) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1400));
+        if (!current()) return;
+      }
+    }
+    const rest = await Promise.all(tasks.slice(1));
+    if (!current()) return;
+    const factoryPack = packOf([primaryRows, ...rest]);
+    if (factoryPack.cols.length > 0) writeFactoryCache(cacheKey, factoryPack.cols);
+    const openResult = await openTask;
     if (!current()) return;
     const factoryCols = factoryPack.cols;
     setLiveSlugs(factoryPack.liveSlugs);
@@ -631,8 +691,10 @@ export function App() {
     }
 
     if (net.id === "mainnet" || net.id === "onyx" || !isPkgPath(nftPath)) {
-      setItems([]);
-      setChainCollections([]);
+      if (cached.length === 0) {
+        setItems([]);
+        setChainCollections([]);
+      }
       setHomeActivity(null);
       setChainNote("");
       setLoading(false);
@@ -1113,6 +1175,62 @@ export function App() {
   }, [refresh]);
 
   useEffect(() => {
+    const cols = chainCollections.filter((col) => isLaunchpadMint(col) && isPkgPath(col.pkg || ""));
+    if (cols.length === 0) {
+      setLaunchEnded(new Set());
+      setLaunchKnown(true);
+      return;
+    }
+    setLaunchKnown(false);
+    let live = true;
+    void (async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const ended = new Set<string>();
+      await Promise.all(
+        cols.map(async (col) => {
+          try {
+            const schedule = parseMintSchedule(await evalExpr(rpc, col.pkg || "", "MintScheduleOf()"));
+            if (launchpadEnded(schedule, now)) ended.add(col.slug);
+          } catch {
+            /* a missed clock keeps the mint button */
+          }
+        }),
+      );
+      if (live) {
+        setLaunchEnded(ended);
+        setLaunchKnown(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [chainCollections, rpc]);
+
+  useEffect(() => {
+    const id = openItemId.trim();
+    const slug = collectionSlug.trim().toLowerCase();
+    if (!/^\d+$/.test(id) || !slug) return;
+    const loaded = collectionItemsRef.current.slug === slug ? collectionItemsRef.current.rows : [];
+    if (loaded.some((row) => row.id === id)) return;
+    const col =
+      chainCollections.find((row) => row.slug === slug) || deskCollections.find((row) => row.slug === slug);
+    const pkg = col?.pkg || "";
+    if (!isPkgPath(pkg)) return;
+    let live = true;
+    void loadItemLine(rpc, pkg, id).then((item) => {
+      if (!live || !item?.id || collectionSlugRef.current !== slug) return;
+      const tagged = item.collection ? item : { ...item, collection: slug };
+      const prior = collectionItemsRef.current.slug === slug ? collectionItemsRef.current.rows : [];
+      const rows = mergeBookItems(prior, [tagged]);
+      collectionItemsRef.current = { slug, rows };
+      setCollectionItems((prev) => (collectionSlugRef.current === slug ? mergeBookItems(prev, [tagged]) : prev));
+    });
+    return () => {
+      live = false;
+    };
+  }, [openItemId, collectionSlug, rpc, chainCollections, deskCollections, collectionItems]);
+
+  useEffect(() => {
     function clearCollection() {
       setCollectionItems(null);
       setCollectionActivity(null);
@@ -1147,12 +1265,23 @@ export function App() {
     let live = true;
     const arg = JSON.stringify(collectionSlug);
     const slugNow = collectionSlug;
-    const alive = () => live && collectionSlugRef.current === slugNow;
+    const alive = () => {
+      const running = bookJobRef.current;
+      if (running && running.slug === slugNow) return !running.stop && collectionSlugRef.current === slugNow;
+      return live && collectionSlugRef.current === slugNow;
+    };
     if (factoryBook) {
-      const changed = collectionSlugRef.current !== slugNow;
+      const existing = bookJobRef.current;
+      if (existing && existing.slug === slugNow && existing.pkg === book) {
+        existing.stop = false;
+        return () => {
+          if (bookJobRef.current === existing) existing.stop = true;
+        };
+      }
+      const changed = collectionItemsRef.current.slug !== slugNow;
       collectionSlugRef.current = slugNow;
       const peer = peerBySlugRef.current[slugNow];
-      const memory = !changed && collectionItemsRef.current.slug === slugNow ? collectionItemsRef.current.rows : [];
+      const memory = !changed ? collectionItemsRef.current.rows : [];
       const cached = readItemBookCache(book);
       const seed =
         (memory.length > 0 ? memory : null) ||
@@ -1182,6 +1311,7 @@ export function App() {
       collectionItemsRef.current = { slug: slugNow, rows: seeded };
       setCollectionItems(seeded.length > 0 ? seeded : null);
       const have = new Set<string>();
+      for (const row of seeded) if (row.id) have.add(row.id);
       let shown = seeded.slice();
       const publish = (rows: Item[]) => {
         if (!alive() || rows.length < 1) return;
@@ -1203,6 +1333,7 @@ export function App() {
         minted: Math.max(progress, col?.minted || col?.count || 0),
         have,
         busy: true,
+        stop: false,
         publish,
       };
       bookJobRef.current = job;
@@ -1211,11 +1342,17 @@ export function App() {
       }
       void (async () => {
         const hint = Math.max(0, col?.minted || col?.count || 0);
-        const mintedP = chainMintedCount(rpc, book, hint);
-        const openP = loadListOpen(rpc, book)
-          .then((rows) => tagCollectionSlug(rows, slugNow))
-          .catch(() => [] as Item[]);
-        void evalExpr(rpc, book, "Hidden()")
+        let mintedP = Promise.resolve(hint);
+        let openP: Promise<Item[] | null> = Promise.resolve(null);
+        let sideArmed = false;
+        const armSide = () => {
+          if (sideArmed) return;
+          sideArmed = true;
+          mintedP = chainMintedCount(rpc, book, hint);
+          openP = loadListOpen(rpc, book)
+            .then((rows) => tagCollectionSlug(rows, slugNow))
+            .catch(() => null);
+          void evalExpr(rpc, book, "Hidden()")
           .then((raw) => {
             if (alive()) setCollectionHidden(String(raw).includes("true"));
           })
@@ -1278,13 +1415,27 @@ export function App() {
             setColOffers(false);
           }
         })();
+        };
         let minted = Math.max(0, col?.minted || col?.count || 0);
         try {
-          if (hint > 0) await loadItemWaves(rpc, book, missingItemIds(have, hint), publish, alive);
-          const [open, fresh] = await Promise.all([openP, mintedP]);
+          const ids = hint > 0 ? missingItemIds(have, hint) : [];
+          const first = ids.slice(0, ITEM_LINE_WAVE);
+          const restIds = ids.slice(ITEM_LINE_WAVE);
+          if (first.length > 0) await loadItemWaves(rpc, book, first, publish, alive);
+          if (!alive()) return;
+          armSide();
+          const restWaves = restIds.length > 0 ? loadItemWaves(rpc, book, restIds, publish, alive) : Promise.resolve(true);
+          const [open, fresh] = await Promise.all([openP, mintedP, restWaves]);
           minted = fresh;
           if (!alive()) return;
-          publish(open);
+          if (open) {
+            const openIds = new Set(open.map((row) => row.id).filter(Boolean));
+            const cleared = shown
+              .filter((row) => row.listed && row.id && !openIds.has(row.id))
+              .map((row) => ({ ...row, listed: false, price: 0 }));
+            if (cleared.length > 0) publish(cleared);
+            publish(open);
+          }
           const cap = Math.max(hint, minted);
           await loadItemWaves(rpc, book, missingItemIds(have, cap), publish, alive);
         } catch {
@@ -1310,6 +1461,7 @@ export function App() {
         }
       })();
       return () => {
+        job.stop = true;
         live = false;
       };
     }
@@ -2355,6 +2507,8 @@ export function App() {
             featuredSlugs={featuredSlugs}
             slug={collectionSlug}
             mintRounds={collectionRounds}
+            launchEnded={launchEnded}
+            launchKnown={launchKnown}
             collectionHidden={collectionHidden}
             moreCount={collectionBook.slug === collectionSlug ? nextPageSize(collectionBook.through, collectionBook.minted) : 0}
             moreBusy={collectionBook.slug === collectionSlug && collectionBook.loading}
@@ -2669,6 +2823,8 @@ export function App() {
             onOpenTab={goTab}
             onOpenCollection={onSlug}
             onOpenMint={onOpenMint}
+            launchEnded={launchEnded}
+            launchKnown={launchKnown}
             onBuy={onBuy}
             onSell={onSell}
             onListWallet={(rows) => void onSubmitList(rows)}

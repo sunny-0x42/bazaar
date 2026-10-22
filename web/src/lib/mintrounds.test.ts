@@ -14,6 +14,7 @@ import {
   mintQtyLimit,
   mergeMintedCount,
   mintQtyNote,
+  launchpadEnded,
   mintRoundCards,
   previewDropSale,
   roundCardCountdown,
@@ -44,6 +45,18 @@ function sale(over: Partial<DropSale> = {}): DropSale {
     ...over,
   };
 }
+
+describe("launchpadEnded", () => {
+  const now = WL_START + 48 * 3600;
+  it("closes after publicEnd and after a whitelist-only window", () => {
+    expect(launchpadEnded({ publicStart: WL_END, publicEnd: PUBLIC_END }, now)).toBe(true);
+    expect(launchpadEnded({ publicStart: WL_END, publicEnd: PUBLIC_END }, PUBLIC_END - 1)).toBe(false);
+    expect(launchpadEnded({ publicStart: WL_END, publicEnd: PUBLIC_END }, PUBLIC_END)).toBe(true);
+    expect(launchpadEnded({ wlEnd: WL_END }, WL_END)).toBe(true);
+    expect(launchpadEnded({ wlEnd: WL_END, publicStart: WL_END + 60 }, WL_END + 10)).toBe(false);
+    expect(launchpadEnded({ publicEnd: 0, wlEnd: 0 }, now)).toBe(false);
+  });
+});
 
 describe("previewDropSale", () => {
   const now = WL_START + 24 * 3600;

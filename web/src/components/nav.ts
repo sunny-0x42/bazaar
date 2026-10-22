@@ -12,12 +12,6 @@ export type PrimaryNavItem = {
 export const PRIMARY_NAV: PrimaryNavItem[] = [
   { id: "explore", label: "Explore", icon: "M4 10.5 12 4l8 6.5V20H4V10.5Z" },
   {
-    id: "genesis",
-    label: "Bazaar Gens",
-    icon: "M12 3 4 7v10l8 4 8-4V7L12 3Zm0 8 8-4M12 11v10M12 11 4 7",
-    mintSlug: BAZAAR_GENS_MINT_SLUG,
-  },
-  {
     id: "rewards",
     label: "Rewards",
     icon: "M19 5 5 19M8.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm7 8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z",

@@ -1,5 +1,4 @@
 import { canAddToCart, isOwnListing, isPreviewItem, rarityClass, type Item, type OfferRow } from "../lib/chain";
-import { nftCanSync } from "../lib/perksync";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
 
@@ -12,6 +11,7 @@ type Props = {
   onMakeOffer?: (item: Item) => void;
   onInstantSell?: (item: Item) => void;
   onReveal?: (item: Item) => void;
+  /** Kept so callers still compile. Sync NFT is signed from Admin by the deploy wallet. */
   onSync?: (item: Item) => void;
   onCart?: (item: Item) => void;
   inCart?: boolean;
@@ -31,7 +31,6 @@ export function ListingCard({
   onCancel,
   onMakeOffer,
   onInstantSell,
-  onSync,
   onCart,
   inCart,
   picked,
@@ -48,7 +47,6 @@ export function ListingCard({
   const canCart = !!onCart && canAddToCart(item, wallet);
   const canInstant = !!onInstantSell && mine && !!topOffer && topOffer.amount > 0 && !!item.id && !preview;
   const hidden = item.revealed === false && (item.slot ?? -1) >= 0;
-  const showNftSync = !!owned && !!onSync && nftCanSync(item);
 
   return (
     <article
@@ -132,18 +130,6 @@ export function ListingCard({
             <div className="listing-price listing-price-muted">—</div>
           )}
         </div>
-        {showNftSync ? (
-          <button
-            className="btn primary nft-sync-btn"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSync?.(item);
-            }}
-          >
-            Sync NFT
-          </button>
-        ) : null}
       </div>
       <div
         className="card-actions"

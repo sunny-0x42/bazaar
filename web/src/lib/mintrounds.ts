@@ -468,6 +468,24 @@ export function scheduleMintPhase(sale: DropSale, now: number, minted: number): 
   return "public";
 }
 
+/**
+ * Timed launch window is over. A public end in the past closes the launchpad.
+ * A whitelist-only window closes at wlEnd when public never opens.
+ * An unset end stays open.
+ */
+export function launchpadEnded(
+  clock: { wlEnd?: number; publicStart?: number; publicEnd?: number },
+  now: number,
+): boolean {
+  const publicEnd = Math.floor(clock.publicEnd || 0);
+  const publicStart = Math.floor(clock.publicStart || 0);
+  const wlEnd = Math.floor(clock.wlEnd || 0);
+  const at = Math.floor(now);
+  if (publicEnd > 0 && at >= publicEnd) return true;
+  if (publicStart <= 0 && publicEnd <= 0 && wlEnd > 0 && at >= wlEnd) return true;
+  return false;
+}
+
 /** Fetched phase plus the local clock. A stored public phase is Start public until publicEnd. */
 export function resolveMintPhase(sale: DropSale, now: number, minted: number): DropSale["phase"] {
   const derived = scheduleMintPhase(sale, now, minted);

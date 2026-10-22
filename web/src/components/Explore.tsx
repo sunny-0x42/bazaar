@@ -93,6 +93,10 @@ type Props = {
   onRevealCollection?: (slug: string) => void;
   collectionHidden?: boolean;
   mintRounds?: MintRoundCard[];
+  /** Slugs whose timed launch window has closed. */
+  launchEnded?: ReadonlySet<string>;
+  /** False while the launch clock is still loading. A failed read still shows Mint. */
+  launchKnown?: boolean;
   hasOffers?: boolean;
   hasPool?: boolean;
   onOpenProfile?: (addr: string) => void;
@@ -152,6 +156,8 @@ export function Explore({
   onRevealCollection,
   collectionHidden = false,
   mintRounds = [],
+  launchEnded,
+  launchKnown = true,
   hasOffers = true,
   hasPool = true,
   onOpenProfile,
@@ -381,8 +387,17 @@ export function Explore({
     const match = [...collectionRows, ...holdings, ...items].find(
       (row) => row.id === itemId && (!slug || !row.collection || row.collection === slug),
     );
-    setSelected(match || pool.get(itemId) || null);
+    const keyed = slug ? pool.get(`${slug}:${itemId}`) : undefined;
+    setSelected(match || keyed || null);
   }, [itemId, pool, slug, collectionRows, holdings, items]);
+
+  useEffect(() => {
+    if (!itemId || slug || !onItemId) return;
+    const slugs = [
+      ...new Set((recent || []).filter((row) => row.id === itemId && row.slug).map((row) => row.slug)),
+    ];
+    if (slugs.length === 1) onItemId(itemId, slugs[0]);
+  }, [itemId, slug, recent, onItemId]);
 
   function openItem(item: Item) {
     if (item.id && onItemId) onItemId(item.id, item.collection);
@@ -451,6 +466,10 @@ export function Explore({
           sealed={collectionHidden}
           creatorAddr={chainCollections.find((col) => col.slug === slug)?.creator || ""}
           mintRounds={mintRounds}
+          mintClosed={
+            !!launchEnded?.has(slug) ||
+            (mintRounds.length > 0 && mintRounds.every((row) => row.state === "ended"))
+          }
           hasOffers={hasOffers}
           hasPool={hasPool}
           loading={collectionItems === null}
@@ -476,13 +495,15 @@ export function Explore({
                 Fixed-price collections on their own realms. Mint and trade in GNOT.
               </p>
               <div className="explore-hero-actions">
-                <button
-                  className="btn primary"
-                  type="button"
-                  onClick={() => onOpenMint?.(BAZAAR_GENS_MINT_SLUG)}
-                >
-                  Bazaar Gens · 1,111
-                </button>
+                {!launchKnown || launchEnded?.has(BAZAAR_GENS_MINT_SLUG) ? null : (
+                  <button
+                    className="btn primary"
+                    type="button"
+                    onClick={() => onOpenMint?.(BAZAAR_GENS_MINT_SLUG)}
+                  >
+                    Bazaar Gens · 1,111
+                  </button>
+                )}
                 <button className="btn" type="button" onClick={() => onOpenTab("create")}>
                   Launch a collection
                 </button>
@@ -497,7 +518,15 @@ export function Explore({
 
           {showHomeSkeleton ? <SkeletonGrid count={3} /> : null}
 
-          {!showHomeSkeleton && !slug && recent && recent.length > 0 ? <LiveTicker rows={recent} images={liveImages} /> : null}
+          {!showHomeSkeleton && !slug && recent && recent.length > 0 ? (
+            <LiveTicker
+              rows={recent}
+              images={liveImages}
+              onOpen={(row) => {
+                if (row.id) onItemId?.(row.id, row.slug);
+              }}
+            />
+          ) : null}
 
           {!showHomeSkeleton && !q && featuredLaunchpads.length > 0 ? (
             <FeaturedCollections
@@ -506,6 +535,8 @@ export function Explore({
               markets={markets}
               onOpen={onSlug}
               onMint={onOpenMint}
+              launchEnded={launchEnded}
+              launchKnown={launchKnown}
             />
           ) : null}
 

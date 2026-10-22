@@ -64,20 +64,20 @@ export function claimShareLine(input: {
     const settle = "An admin Settle splits the unsettled pool across recorded weight.";
     if (input.usingCounted) {
       const noun = input.countedNfts === 1 ? "1 revealed NFT" : `${input.countedNfts.toLocaleString("en-US")} revealed NFTs`;
-      return `Counted Share weight is ${input.countedWeight.toLocaleString("en-US")} from ${noun}. ${pay} ${pool} Sync records that weight. ${settle}`;
+      return `Counted Share weight is ${input.countedWeight.toLocaleString("en-US")} from ${noun}. ${pay} ${pool} The admin wallet records that weight. ${settle}`;
     }
     if (input.weight > 0 && input.totalWeight > 0) {
       const pct = ((input.weight / input.totalWeight) * 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
       return `${pay} ${pool} Recorded weight is ${input.weight.toLocaleString("en-US")} of ${input.totalWeight.toLocaleString("en-US")} (${pct}% of pool weight). ${settle}`;
     }
     if ((input.epochs ?? 0) > 0) {
-      return `${pay} ${pool} Sync records this wallet's NFTs. The next Settle includes that weight.`;
+      return `${pay} ${pool} The admin wallet records this wallet's NFTs. The next Settle includes that weight.`;
     }
-    return `${pay} ${pool} Sync records this wallet's NFTs. Settle has not split this pool yet.`;
+    return `${pay} ${pool} The admin wallet records this wallet's NFTs. Settle has not split this pool yet.`;
   }
   if (input.usingCounted) {
     const noun = input.countedNfts === 1 ? "1 revealed NFT" : `${input.countedNfts.toLocaleString("en-US")} revealed NFTs`;
-    return `Counted Share weight is ${input.countedWeight.toLocaleString("en-US")} from ${noun}. ${pay} Sync records it. The GNOT already in the pool stays with weight recorded earlier.`;
+    return `Counted Share weight is ${input.countedWeight.toLocaleString("en-US")} from ${noun}. ${pay} The admin wallet records it. The GNOT already in the pool stays with weight recorded earlier.`;
   }
   if (input.weight > 0 && input.totalWeight > 0) {
     const pct = ((input.weight / input.totalWeight) * 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -270,7 +270,7 @@ export function holderNotice(desk: RewardDesk, connected: boolean): string {
     return "This wallet is eligible. Buy can use its holder discount when that discount is the higher of the two wallets.";
   }
   if (desk.perkDiscountBps > 0 || desk.weight > 0) {
-    return "This wallet is eligible on the perk record. Buy uses it after Sync.";
+    return "This wallet is eligible on the perk record. Buy uses it after the admin wallet records it.";
   }
   if (desk.countedBps > 0 || desk.countedWeight > 0) {
     const n = Math.max(0, Math.floor(desk.countedNfts));
@@ -278,15 +278,15 @@ export function holderNotice(desk: RewardDesk, connected: boolean): string {
     const tier = discountTier(desk.countedBps);
     const tierBit = tier ? ` (${tier})` : "";
     const weight = Math.max(0, Math.floor(desk.countedWeight)).toLocaleString("en-US");
-    return `This wallet holds ${noun}. Counted discount is ${bpsPercent(desk.countedBps)}${tierBit}. Share weight is ${weight}. Sync writes this onto Buy. A listed NFT is not counted.`;
+    return `This wallet holds ${noun}. Counted discount is ${bpsPercent(desk.countedBps)}${tierBit}. Share weight is ${weight}. The admin wallet records this onto Buy. A listed NFT is not counted.`;
   }
   const n = Math.max(0, Math.floor(desk.held));
   const noun = n === 1 ? "1 Bazaar Gens" : `${n.toLocaleString("en-US")} Bazaar Gens`;
   if (n > 0 && desk.sealed) {
-    return `This wallet holds ${noun}. Not eligible yet: the collection is still sealed, so the tier is unread. After reveal, Sync counts this wallet.`;
+    return `This wallet holds ${noun}. Not eligible yet: the collection is still sealed, so the tier is unread. After reveal, the admin wallet records this wallet.`;
   }
   if (n > 0) {
-    return `This wallet holds ${noun}. None are counted. Sync counts a revealed, unlisted NFT. A listed NFT does not count.`;
+    return `This wallet holds ${noun}. None are counted. The admin wallet records a revealed, unlisted NFT. A listed NFT does not count.`;
   }
   return "This wallet is not eligible. It does not hold a Bazaar Gens NFT.";
 }

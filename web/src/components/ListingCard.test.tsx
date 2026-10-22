@@ -19,20 +19,17 @@ const item: Item = {
 };
 
 describe("ListingCard sync", () => {
-  it("shows Sync NFT on an owned revealed Bazaar Gens", () => {
-    const html = renderToStaticMarkup(
+  it("does not show Sync NFT on a card", () => {
+    const owned = renderToStaticMarkup(
       <ListingCard item={item} owned onOpen={() => undefined} onSync={() => undefined} />,
     );
-    expect(html).toContain(">Sync NFT<");
-  });
-
-  it("hides Sync NFT when the NFT is listed or not owned", () => {
     const listed = renderToStaticMarkup(
       <ListingCard item={{ ...item, listed: true, price: 1 }} owned onOpen={() => undefined} onSync={() => undefined} />,
     );
     const visitor = renderToStaticMarkup(
       <ListingCard item={item} onOpen={() => undefined} onSync={() => undefined} />,
     );
+    expect(owned).not.toContain(">Sync NFT<");
     expect(listed).not.toContain(">Sync NFT<");
     expect(visitor).not.toContain(">Sync NFT<");
   });

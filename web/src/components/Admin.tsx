@@ -126,7 +126,7 @@ export function Admin({
           Fees
         </button>
         <button type="button" className={pane === "share" ? "active" : ""} onClick={() => setPane("share")}>
-          Share
+          Sync NFT
         </button>
         <button type="button" className={pane === "whitelist" ? "active" : ""} onClick={() => setPane("whitelist")}>
           Whitelist

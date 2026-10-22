@@ -16,7 +16,6 @@ import {
   type OfferRow,
 } from "../lib/chain";
 import type { ChartPoint } from "../lib/chart";
-import { nftCanSync } from "../lib/perksync";
 import { ItemArt } from "./ItemArt";
 import { PriceChart } from "./PriceChart";
 import { PriceMark } from "./PriceMark";
@@ -45,6 +44,7 @@ type Props = {
   activity?: Activity[];
   onCart?: (item: Item) => void;
   inCart?: boolean;
+  /** Kept so callers still compile. Sync NFT is signed from Admin by the deploy wallet. */
   onSync?: (item: Item) => void;
 };
 
@@ -72,7 +72,6 @@ export function ListingDrawer({
   activity = [],
   onCart,
   inCart,
-  onSync,
 }: Props) {
   const [offerGnot, setOfferGnot] = useState("1");
   const listed = item.listed && item.price > 0;
@@ -240,19 +239,6 @@ export function ListingDrawer({
             </div>
             {listed ? <p className="hint">{protocolFeeLabel()} protocol included in the price.</p> : null}
             <div className="item-detail-cta">
-              {(owned || mine) && onSync && nftCanSync(item) ? (
-                <>
-                  <button
-                    className="btn primary btn-block"
-                    type="button"
-                    disabled={blocked || busy}
-                    onClick={() => onSync(item)}
-                  >
-                    {busy ? "Syncing…" : "Sync NFT"}
-                  </button>
-                  <p className="hint">Sync records this NFT. Claim is on Rewards.</p>
-                </>
-              ) : null}
               {actions}
             </div>
             {canOffer ? (
@@ -352,7 +338,9 @@ export function ListingDrawer({
                       <span>{row.type}</span>
                       {kind ? <em className="property-rare">{kind}</em> : null}
                     </span>
-                    <span className={tier ? "property-value is-tier" : "property-value"}>{row.value}</span>
+                    <span className={tier ? "property-value is-tier" : "property-value"} title={row.value}>
+                      {row.value}
+                    </span>
                     {row.total > 0 ? (
                       <span className="property-pct">
                         {formatTraitPct(row.pct)} have this

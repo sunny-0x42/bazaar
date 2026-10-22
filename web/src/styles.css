@@ -1967,6 +1967,7 @@ input.sell-card-price:focus {
   padding: 12px 12px 14px;
   position: sticky;
   top: 72px;
+  min-width: 0;
 }
 .trait-filters-head {
   display: flex;
@@ -1994,9 +1995,16 @@ input.sell-card-price:focus {
   gap: 8px;
   font-size: 13px;
   min-height: 28px;
+  min-width: 0;
 }
-.trait-check input { accent-color: var(--accent); }
-.trait-check .muted { margin-left: auto; font-size: 11px; }
+.trait-check input { accent-color: var(--accent); flex: 0 0 auto; }
+.trait-check .trait-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trait-check .muted { margin-left: auto; font-size: 11px; flex: 0 0 auto; }
 .trait-price { display: flex; align-items: center; gap: 6px; }
 .trait-price input {
   width: 100%;
@@ -2013,6 +2021,9 @@ input.sell-card-price:focus {
   width: 100%;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   background: none;
   border: 0;
   padding: 4px 0;
@@ -2022,6 +2033,13 @@ input.sell-card-price:focus {
   text-transform: uppercase;
   color: var(--ink);
 }
+.trait-group-head .trait-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trait-group-head .muted { flex: 0 0 auto; }
 .sweep-mini {
   display: inline-flex;
   align-items: center;
@@ -3082,6 +3100,7 @@ input.sell-card-price:focus {
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .property-pct {
   display: flex;
@@ -4761,7 +4780,7 @@ label input.mono { font-size: 13px; }
   -webkit-backdrop-filter: blur(20px) saturate(1.35);
   border-top: 1px solid var(--line);
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 .bottom-nav button {
   background: none;

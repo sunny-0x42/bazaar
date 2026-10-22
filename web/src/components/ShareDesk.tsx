@@ -36,6 +36,30 @@ const emptyView = (): ShareDeskView => ({
   unsettledUgnot: 0,
 });
 
+function spanStorageKey(pkg: string): string {
+  return `bazaar.syncspan.v1:${pkg}`;
+}
+
+function readSpanThrough(pkg: string): number {
+  if (!pkg || typeof sessionStorage === "undefined") return 0;
+  try {
+    const n = Math.floor(Number(sessionStorage.getItem(spanStorageKey(pkg))));
+    return n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeSpanThrough(pkg: string, through: number) {
+  if (!pkg || typeof sessionStorage === "undefined") return;
+  try {
+    if (through > 0) sessionStorage.setItem(spanStorageKey(pkg), String(through));
+    else sessionStorage.removeItem(spanStorageKey(pkg));
+  } catch {
+    /* private mode */
+  }
+}
+
 export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan, onSettle, preview }: Props) {
   const [view, setView] = useState<ShareDeskView>(preview ?? emptyView());
   const [through, setThrough] = useState(0);
@@ -91,6 +115,12 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
     };
   }, [preview, rpc, factory, collection, reload]);
 
+  useEffect(() => {
+    if (preview || !view.perkPkg) return;
+    const n = readSpanThrough(view.perkPkg);
+    if (n > 0) setThrough(n);
+  }, [preview, view.perkPkg]);
+
   const next = nextSyncSpan(through, view.minted);
   const epoch = view.epoch === true;
   const backlog = !epoch && backlogUnassigned(view.totalWeight, view.poolUgnot, view.accountedUgnot);
@@ -107,6 +137,7 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
     const ok = await onSyncSpan(view.perkPkg, span.start, span.end);
     if (!ok) return;
     setThrough(span.end);
+    if (!preview) writeSpanThrough(view.perkPkg, span.end);
     setReload((n) => n + 1);
   }
 
@@ -120,12 +151,12 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
   }
 
   return (
-    <section className="panel admin-fee-card share-desk" aria-label="Share desk">
-      <h2>Share desk</h2>
+    <section className="panel admin-fee-card share-desk" aria-label="Sync NFT">
+      <h2>Sync NFT</h2>
       <p className="hint">
         {epoch
-          ? "Holders sync their own revealed NFTs on Rewards. Sync records weight only. After Settle, holders Claim. This desk records minted ids and does not pay GNOT. One signature records at most 20 tokens."
-          : "Holders sync their own revealed NFTs on Rewards, then Claim. This desk records any minted id, including one this wallet does not hold. One signature records at most 20 tokens. An unminted slot is skipped by the realm."}
+          ? "The deploy wallet syncs minted Bazaar Gens from this desk. Sync records weight only and does not pay GNOT. After Settle, holders Claim. One signature covers at most 20 tokens."
+          : "The deploy wallet syncs minted Bazaar Gens from this desk, including an NFT this wallet does not hold. One signature covers at most 20 tokens. An unminted slot is skipped by the realm."}
       </p>
       <div className="admin-kpi-grid">
         <div className="admin-kpi"><dt>Pool</dt><dd>{formatRewardGnot(view.poolUgnot)} GNOT</dd></div>
@@ -158,13 +189,27 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
       <button
         className="btn primary"
         type="button"
+        data-sync="nft"
         disabled={blocked || busy || !next || needsAccept || !view.perkPkg}
         onClick={() => {
           if (next) void record(next);
         }}
       >
-        {busy ? "Recording…" : next ? `Record ${next.start}–${next.end}` : "Recorded"}
+        {busy ? "Syncing…" : next ? "Sync NFT" : "Synced"}
       </button>
+      {through > 0 ? (
+        <button
+          className="btn"
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setThrough(0);
+            if (!preview) writeSpanThrough(view.perkPkg, 0);
+          }}
+        >
+          Start from 1
+        </button>
+      ) : null}
       <form
         className="share-span"
         onSubmit={(e) => {
@@ -185,7 +230,7 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
           <input value={end} onChange={(e) => setEnd(e.target.value)} inputMode="numeric" />
         </label>
         <button className="btn" type="submit" disabled={blocked || busy || needsAccept || !view.perkPkg}>
-          Record span
+          Sync span
         </button>
       </form>
       {epoch ? (
@@ -207,7 +252,7 @@ export function ShareDesk({ rpc, factory, collection, blocked, busy, onSyncSpan,
           ) : (
             <p className="hint">
               {view.totalWeight <= 0
-                ? "Settle needs recorded weight. Sync or Record first."
+                ? "Settle needs recorded weight. Sync NFT first."
                 : "Nothing unsettled to split."}
             </p>
           )}

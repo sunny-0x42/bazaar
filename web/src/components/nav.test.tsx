@@ -19,37 +19,34 @@ function activeNavLabels(html: string, aria: string): string[] {
   return labels;
 }
 
-describe("Bazaar Gens nav", () => {
-  it("opens the mint desk instead of the whitelist page", () => {
-    const item = PRIMARY_NAV.find((row) => row.label === "Bazaar Gens");
-    expect(item?.mintSlug).toBe(BAZAAR_GENS_MINT_SLUG);
+describe("Primary nav", () => {
+  it("lists Explore, Rewards, and Profile", () => {
+    expect(PRIMARY_NAV.map((row) => row.label)).toEqual(["Explore", "Rewards", "Profile"]);
+    expect(PRIMARY_NAV.some((row) => row.label === "Bazaar Gens")).toBe(false);
     expect(mintHash(BAZAAR_GENS_MINT_SLUG)).toBe("#/m/bazaargens");
-    const tabs: string[] = [];
-    const mints: string[] = [];
-    activatePrimary(item!, {
-      onTab: (tab) => tabs.push(tab),
-      onExploreHome: () => tabs.push("home"),
-      onOpenMint: (slug) => mints.push(slug),
-    });
-    expect(mints).toEqual(["bazaargens"]);
-    expect(tabs).toEqual([]);
   });
 
-  it("keeps four primary items and highlights Bazaar Gens only on its mint page", () => {
-    expect(PRIMARY_NAV.map((row) => row.label)).toEqual(["Explore", "Bazaar Gens", "Rewards", "Profile"]);
-    const gens = PRIMARY_NAV.find((row) => row.label === "Bazaar Gens")!;
+  it("highlights Rewards on the rewards page and no primary item on the Bazaar Gens mint page", () => {
+    const explore = PRIMARY_NAV.find((row) => row.label === "Explore")!;
     const rewards = PRIMARY_NAV.find((row) => row.label === "Rewards")!;
-    expect(primaryNavActive(gens, "create", "bazaargens")).toBe(true);
-    expect(primaryNavActive(rewards, "create", "bazaargens")).toBe(false);
-    expect(primaryNavActive(gens, "rewards", "")).toBe(false);
     expect(primaryNavActive(rewards, "rewards", "")).toBe(true);
+    expect(primaryNavActive(explore, "rewards", "")).toBe(false);
+    expect(primaryNavActive(rewards, "create", "bazaargens")).toBe(false);
+    expect(primaryNavActive(explore, "create", "bazaargens")).toBe(false);
+    const home: string[] = [];
+    activatePrimary(explore, {
+      onTab: () => undefined,
+      onExploreHome: () => home.push("home"),
+      onOpenMint: () => undefined,
+    });
+    expect(home).toEqual(["home"]);
   });
 
-  it("marks the same item active in the header and the mobile nav", () => {
+  it("marks Rewards active in the header and the mobile nav", () => {
     const noop = () => undefined;
     const props = {
-      tab: "create" as const,
-      mintSlug: "bazaargens",
+      tab: "rewards" as const,
+      mintSlug: "",
       onTab: noop,
       onExploreHome: noop,
       onOpenMint: noop,
@@ -67,8 +64,10 @@ describe("Bazaar Gens nav", () => {
       />,
     );
     const mobile = renderToStaticMarkup(<BottomNav {...props} />);
-    expect(activeNavLabels(header, "Primary")).toEqual(["Bazaar Gens"]);
-    expect(activeNavLabels(mobile, "Mobile")).toEqual(["Bazaar Gens"]);
+    expect(header).not.toContain(">Bazaar Gens<");
+    expect(mobile).not.toContain(">Bazaar Gens<");
+    expect(activeNavLabels(header, "Primary")).toEqual(["Rewards"]);
+    expect(activeNavLabels(mobile, "Mobile")).toEqual(["Rewards"]);
   });
 
   it("keeps the home Bazaar Gens button on the explore page", () => {

@@ -1,4 +1,4 @@
-import { activityKindLabel, liveTradeRows, type Activity } from "../lib/chain";
+import { activityKindLabel, liveItemPath, liveTradeRows, type Activity } from "../lib/chain";
 import { liveArtKey } from "../lib/liveart";
 import { ItemArt } from "./ItemArt";
 import { PriceMark } from "./PriceMark";
@@ -6,15 +6,10 @@ import { PriceMark } from "./PriceMark";
 type Props = {
   rows: Activity[];
   images?: Record<string, { image: string; name: string }>;
+  onOpen?: (row: Activity) => void;
 };
 
-function hrefFor(row: Activity): string {
-  if (row.id) return `#/i/${row.id}`;
-  if (row.slug) return `#/c/${row.slug}`;
-  return "#/explore";
-}
-
-export function LiveTicker({ rows, images = {} }: Props) {
+export function LiveTicker({ rows, images = {}, onOpen }: Props) {
   const trades = liveTradeRows(rows, 12);
   if (trades.length === 0) return null;
   const loop = [...trades, ...trades];
@@ -38,7 +33,16 @@ export function LiveTicker({ rows, images = {} }: Props) {
               const copy = i >= trades.length;
               return (
                 <li key={`${row.kind}-${row.id}-${row.name}-${i}`} aria-hidden={copy || undefined}>
-                  <a className={`live-pull kind-${(row.kind || "activity").toLowerCase()}`} href={hrefFor(row)} tabIndex={copy ? -1 : undefined}>
+                  <a
+                    className={`live-pull kind-${(row.kind || "activity").toLowerCase()}`}
+                    href={liveItemPath(row)}
+                    tabIndex={copy ? -1 : undefined}
+                    onClick={(event) => {
+                      if (!onOpen || !row.id) return;
+                      event.preventDefault();
+                      onOpen(row);
+                    }}
+                  >
                     <span className="live-pull-art">
                       <ItemArt name={label} image={art?.image || ""} alt={copy ? "" : label} priority={!copy && i < 6} />
                       <span className="live-kind">{activityKindLabel(row.kind)}</span>

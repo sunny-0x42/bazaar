@@ -10,6 +10,7 @@ import {
   gnotFromCoins,
   mintHash,
   itemHash,
+  liveItemPath,
   parseHash,
   sharePath,
   tabHash,
@@ -185,6 +186,16 @@ describe("drop slots / traits", () => {
       { type: "Background", value: "Dusk" },
       { type: "Fur", value: "Ember" },
     ]);
+    expect(parseTraits("model:prop,pilot:gnome,laser:#fff1c1")).toEqual([
+      { type: "model", value: "prop" },
+      { type: "pilot", value: "gnome" },
+      { type: "laser", value: "#fff1c1" },
+    ]);
+    expect(parseTraits("Fee discount:25 bps;Pool share:11 percent")).toEqual([
+      { type: "Fee discount", value: "25 bps" },
+      { type: "Pool share", value: "11 percent" },
+    ]);
+    expect(parseTraits("Note:hello, world")).toEqual([{ type: "Note", value: "hello, world" }]);
     expect(parseItems(`("1|Dusk Fox|g1a||0|false|/samples/foxes-01.png|gems|Rare|Background:Dusk" string)`)[0].traits).toBe(
       "Background:Dusk",
     );
@@ -1508,6 +1519,9 @@ describe("parseHash", () => {
     expect(mintHash("stones")).toBe("#/m/stones");
     expect(itemHash("5", "madlads")).toBe("#/c/madlads/5");
     expect(itemHash("12")).toBe("#/i/12");
+    expect(liveItemPath({ slug: "bazaargens", id: "206" })).toBe("/c/bazaargens/206");
+    expect(liveItemPath({ id: "12" })).toBe("/i/12");
+    expect(liveItemPath({ slug: "stones" })).toBe("/c/stones");
     expect(sharePath("#/c/stones")).toBe("/c/stones");
     expect(sharePath("#/c/madlads/5")).toBe("/c/madlads/5");
     expect(sharePath("#/m/stones")).toBe("/m/stones");

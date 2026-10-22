@@ -10,9 +10,12 @@ type Props = {
   markets: Map<string, CollectionMarket>;
   onOpen: (slug: string) => void;
   onMint?: (slug: string) => void;
+  /** Slugs whose timed launch window has closed. */
+  launchEnded?: ReadonlySet<string>;
+  launchKnown?: boolean;
 };
 
-export function FeaturedCollections({ title, collections, markets, onOpen, onMint }: Props) {
+export function FeaturedCollections({ title, collections, markets, onOpen, onMint, launchEnded, launchKnown = true }: Props) {
   if (collections.length === 0) return null;
   const launchpad = !!onMint;
   return (
@@ -26,7 +29,8 @@ export function FeaturedCollections({ title, collections, markets, onOpen, onMin
           const open = isOpenEdition(col);
           const remaining = open ? 0 : Math.max(0, col.maxSupply - col.minted);
           const royaltyBps = col.royaltyBps ?? 0;
-          const mintable = launchpad && isPublicDrop(col) && isLaunchpadMint(col);
+          const mintable =
+            launchpad && isPublicDrop(col) && isLaunchpadMint(col) && launchKnown && !launchEnded?.has(col.slug);
           return (
             <article
               key={col.slug}

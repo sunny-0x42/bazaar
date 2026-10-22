@@ -370,11 +370,33 @@ export type DropSlot = {
 
 export type Trait = { type: string; value: string };
 
-export function parseTraits(raw: string): Trait[] {
-  const out: Trait[] = [];
+function traitPieces(raw: string): string[] {
+  const out: string[] = [];
   for (const part of String(raw || "").split(";")) {
     const s = part.trim();
     if (!s) continue;
+    const bits = s
+      .split(",")
+      .map((bit) => bit.trim())
+      .filter(Boolean);
+    const pairs =
+      bits.length > 1 &&
+      bits.every((bit) => {
+        const i = bit.indexOf(":");
+        if (i <= 0) return false;
+        const key = bit.slice(0, i).trim();
+        const value = bit.slice(i + 1).trim();
+        return !!key && !!value && !/\s/.test(key);
+      });
+    if (pairs) out.push(...bits);
+    else out.push(s);
+  }
+  return out;
+}
+
+export function parseTraits(raw: string): Trait[] {
+  const out: Trait[] = [];
+  for (const s of traitPieces(raw)) {
     const i = s.indexOf(":");
     if (i <= 0) continue;
     const type = s.slice(0, i).trim();
@@ -1390,7 +1412,7 @@ export function parseHash(hash: string): HashView {
   return empty;
 }
 
-/** Collection mint desk opened from the home button and the Bazaar Gens nav item. */
+/** Collection mint desk opened from the home button. */
 export const BAZAAR_GENS_MINT_SLUG = "bazaargens";
 
 export function mintHash(slug: string): string {
@@ -1405,6 +1427,18 @@ export function itemHash(id: string, slug = ""): string {
   const s = slug.trim().toLowerCase();
   if (s) return `#/c/${s}/${id}`;
   return `#/i/${id}`;
+}
+
+/** Public path for one live-tape card. A slug opens the collection item page. */
+export function liveItemPath(row: { id?: string; slug?: string }): string {
+  const id = String(row.id || "").trim();
+  const slug = String(row.slug || "").trim().toLowerCase();
+  const item = /^\d+$/.test(id);
+  const col = /^[a-z0-9-]{1,32}$/.test(slug);
+  if (item && col) return `/c/${slug}/${id}`;
+  if (item) return `/i/${id}`;
+  if (col) return `/c/${slug}`;
+  return "/";
 }
 
 export function tabHash(tab: HashView["tab"]): string {

@@ -88,6 +88,8 @@ type Props = {
   onReveal?: (id: string) => void;
   onSyncNft?: (item: Item) => void;
   onOpenMint?: (slug: string) => void;
+  /** Timed launch window is over, so the hero mint button stays off. */
+  mintClosed?: boolean;
   onRevealCollection?: () => void;
   sealed?: boolean;
   creatorAddr?: string;
@@ -132,6 +134,7 @@ export function CollectionPage({
   onReveal,
   onSyncNft,
   onOpenMint,
+  mintClosed = false,
   onRevealCollection,
   sealed = false,
   creatorAddr = "",
@@ -263,7 +266,7 @@ export function CollectionPage({
                 ) : null}
               </div>
             </div>
-            {collection && isPublicDrop(collection) && onOpenMint ? (
+            {collection && isPublicDrop(collection) && onOpenMint && !mintClosed ? (
               <div className="collection-hero-actions">
                 <button
                   className={

@@ -117,7 +117,7 @@ describe("RewardsPage", () => {
     expect(html).toContain("It does not hold a Bazaar Gens NFT.");
     expect(html).toContain("Claim pays this wallet 0.000000 GNOT (0 ugnot).");
     expect(html).toContain("This wallet has no recorded weight.");
-    expect(html).toContain("Sync after reveal");
+    expect(html).toContain("The deploy wallet records weight from Admin");
     expect(html).not.toContain("Protocol fee skipped");
   });
 
@@ -208,11 +208,9 @@ describe("RewardsPage", () => {
     expect(html).toContain("Claim pays this wallet 0.000000 GNOT (0 ugnot).");
     expect(html).toContain("stays with weight recorded earlier");
     expect(html).toContain("Counted weight");
-    expect(html).toContain("Sync writes the counted discount onto the factory");
-    expect(html).toContain(">Sync 1 NFT<");
-    expect(html).toContain("Your NFTs");
-    expect(html).toContain("Bazaar Gens #119");
-    expect(html).toContain(">Sync NFT<");
+    expect(html).toContain("The admin wallet records this discount onto the factory");
+    expect(html).not.toContain(">Sync NFT<");
+    expect(html).not.toContain(">Sync 1 NFT<");
     expect(html).toContain("claimable by the first wallet recorded");
     expect(html).toContain("buyer still pays the full list price");
     expect(html).not.toContain("Protocol fee skipped");
@@ -260,7 +258,7 @@ describe("RewardsPage", () => {
     expect(html).toContain("GNOT unsettled");
     expect(html).toContain("Unsettled pool is 2.456437 GNOT (2,456,437 ugnot).");
     expect(html).toContain("An admin Settle splits the unsettled pool across recorded weight.");
-    expect(html).toContain("Sync records weight only.");
+    expect(html).toContain("The deploy wallet records weight from Admin");
     expect(html).toContain("Claim earlier pool");
     expect(html).toContain('data-legacy-claim="100000"');
     expect(html).toContain("Earlier pool pays this wallet 0.100000 GNOT");

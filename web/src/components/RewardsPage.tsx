@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { parseEvalAddress, parseEvalBool, parseEvalInt, parseEvalString, parseIds, parseItems } from "../lib/chain";
 import { ITEM_LINE_WAVE } from "../lib/itembook";
 import { claimFromLedger, claimFromPkg, parseLedgerInt, parseWalletGet, ugnotNumber, walletGetAbsent } from "../lib/perkclaim";
-import { backlogUnassigned, holderNeedsSync, syncableIds } from "../lib/perksync";
+import { backlogUnassigned, syncableIds } from "../lib/perksync";
 import {
   LEGACY_PERK_PKG,
   LEGACY_PERK_SINK,
@@ -37,6 +37,7 @@ type Props = {
   busy: boolean;
   onConnect: () => void;
   onClaim: (pkg: string) => Promise<boolean>;
+  /** Kept so callers still compile. Sync NFT is signed from Admin by the deploy wallet. */
   onSync: (pkg: string, ids: number[]) => Promise<boolean>;
   preview?: RewardDesk;
 };
@@ -108,7 +109,6 @@ export function RewardsPage({
   busy,
   onConnect,
   onClaim,
-  onSync,
   preview,
 }: Props) {
   const [desk, setDesk] = useState<RewardDesk>(preview ?? emptyDesk());
@@ -325,16 +325,9 @@ export function RewardsPage({
   const buyTier = discountTier(desk.discountBps);
   const perkTier = discountTier(desk.perkDiscountBps);
   const countedTier = discountTier(desk.countedBps);
-  const syncIds = desk.syncIds ?? [];
-  const showSync = holderNeedsSync({ ...desk, syncIds });
   const backlog = !desk.epoch && backlogUnassigned(desk.totalWeight, desk.poolUgnot, desk.accountedUgnot);
   const legacy = showLegacyClaim(desk.perkPkg, desk.legacyPkg, desk.legacyClaimUgnot);
-  const syncLead = desk.epoch
-    ? "Sync records a revealed NFT you hold. An admin Settle splits the unsettled pool. Then Claim pays this wallet."
-    : "Sync records a revealed NFT you hold. Then Claim pays that weight.";
-  const poolNote = desk.epoch
-    ? "Sync records weight only. The unsettled pool stays unsplit until an admin Settle."
-    : "Sync records your revealed NFTs. The GNOT already in the pool is claimable by the first wallet recorded.";
+  const poolNote = "The GNOT already in the pool is claimable by the first wallet recorded.";
   const exampleGnot = formatRewardGnot(REWARD_EXAMPLE_UGNOT);
   const discountApplies = connected && exampleBps > 0;
   const eligible = holderEligible(desk);
@@ -372,34 +365,6 @@ export function RewardsPage({
 
       {loading ? null : (
         <>
-          {connected && showSync ? (
-            <section className="rewards-nfts" aria-label="Your NFTs">
-              <div className="rewards-nfts-head">
-                <h2>Your NFTs</h2>
-                <p>{syncLead}</p>
-              </div>
-              <ul className="rewards-nft-list">
-                {syncIds.map((id) => (
-                  <li key={id}>
-                    <span>Bazaar Gens #{id}</span>
-                    <button
-                      className="btn primary"
-                      type="button"
-                      disabled={blocked || busy || !desk.perkPkg}
-                      onClick={() => {
-                        void onSync(desk.perkPkg, [id]).then((ok) => {
-                          if (ok) setReload((n) => n + 1);
-                        });
-                      }}
-                    >
-                      {busy ? "Syncing…" : "Sync NFT"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {backlog || (desk.epoch && showSync) ? <p className="rewards-note">{poolNote}</p> : null}
-            </section>
-          ) : null}
           <div className="rewards-board">
             <article className="rewards-stat" data-tier={tier || undefined} aria-label="Protocol fee on a secondary sale">
               <p className="rewards-kicker">
@@ -449,11 +414,11 @@ export function RewardsPage({
                 ) : null}
               </dl>
               {connected && desk.countedBps > 0 && desk.countedBps !== desk.discountBps ? (
-                <p className="rewards-note">Sync writes the counted discount onto the factory.</p>
+                <p className="rewards-note">The admin wallet records this discount onto the factory.</p>
               ) : connected && desk.perkPkg && desk.perkDiscountBps !== desk.discountBps ? (
                 <p className="rewards-note">
-                  Perk record {bpsPercent(desk.perkDiscountBps)}. Buy is still using {bpsPercent(desk.discountBps)}. Sync
-                  writes the perk figure onto the factory.
+                  Perk record {bpsPercent(desk.perkDiscountBps)}. Buy is still using {bpsPercent(desk.discountBps)}. The
+                  admin wallet records the perk figure onto the factory.
                 </p>
               ) : null}
             </article>
@@ -516,20 +481,6 @@ export function RewardsPage({
               </dl>
               {connected ? (
                 <div className="rewards-actions">
-                  {showSync ? (
-                    <button
-                      className={desk.claimUgnot > 0 ? "btn" : "btn primary"}
-                      type="button"
-                      disabled={blocked || busy || !desk.perkPkg}
-                      onClick={() => {
-                        void onSync(desk.perkPkg, syncIds).then((ok) => {
-                          if (ok) setReload((n) => n + 1);
-                        });
-                      }}
-                    >
-                      {busy ? "Syncing…" : `Sync ${syncIds.length === 1 ? "1 NFT" : `${syncIds.length} NFTs`}`}
-                    </button>
-                  ) : null}
                   <button
                     className="btn primary"
                     type="button"
@@ -569,7 +520,7 @@ export function RewardsPage({
                   {formatUgnot(desk.legacyClaimUgnot)} ugnot).
                 </p>
               ) : null}
-              {connected && showSync && (backlog || desk.epoch) ? <p className="rewards-note">{poolNote}</p> : null}
+              {connected && backlog ? <p className="rewards-note">{poolNote}</p> : null}
             </article>
           </div>
           <ul className="rewards-rules">
@@ -577,8 +528,8 @@ export function RewardsPage({
             <li>Share weight adds every minted, revealed NFT. An unminted launch slot adds nothing. It is not a count of NFTs.</li>
             <li>
               {desk.epoch
-                ? "Sync after reveal, transfer, or list. An admin Settle splits the unsettled pool by recorded weight. Then Claim pays this wallet. A listed NFT adds nothing."
-                : "Sync after reveal, transfer, or list. Then Claim pays the recorded weight. A listed NFT adds nothing."}
+                ? "The deploy wallet records weight from Admin after a reveal, transfer, or list. Settle splits the unsettled pool by recorded weight. Then Claim pays this wallet. A listed NFT adds nothing."
+                : "The deploy wallet records weight from Admin after a reveal, transfer, or list. Then Claim pays the recorded weight. A listed NFT adds nothing."}
             </li>
           </ul>
         </>

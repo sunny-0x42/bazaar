@@ -67,9 +67,10 @@ export function TraitFilters({
               type="button"
               className="trait-group-head"
               aria-expanded={isOpen}
+              title={g.type}
               onClick={() => setOpen((s) => ({ ...s, [g.type]: !isOpen }))}
             >
-              {g.type}
+              <span className="trait-type">{g.type}</span>
               {picked.length ? <span className="muted">{picked.length}</span> : null}
             </button>
             {isOpen ? (
@@ -85,7 +86,9 @@ export function TraitFilters({
                           checked={on}
                           onChange={() => onToggle(g.type, row.value)}
                         />
-                        <span className={tone.includes("rarity-") ? tone : undefined}>{row.value}</span>
+                        <span className={tone.includes("rarity-") ? `trait-value ${tone}` : "trait-value"} title={row.value}>
+                          {row.value}
+                        </span>
                         <span className="muted">{row.count}</span>
                       </label>
                     </li>

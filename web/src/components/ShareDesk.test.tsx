@@ -23,13 +23,15 @@ describe("ShareDesk", () => {
         preview={view}
       />,
     );
-    expect(html).toContain("Share desk");
+    expect(html).toContain("Sync NFT");
+    expect(html).toContain("deploy wallet");
     expect(html).toContain("2.40 GNOT");
     expect(html).toContain('data-next="1-20"');
     expect(html).toContain("Next span 1–20 of 218 minted.");
     expect(html).toContain("first NFT this records");
     expect(html).toContain("disabled");
-    expect(html).toContain(">Record 1–20<");
+    expect(html).toContain('data-sync="nft"');
+    expect(html).toContain(">Sync NFT<");
   });
 
   it("opens the button once weight is already recorded", () => {
@@ -45,7 +47,7 @@ describe("ShareDesk", () => {
       />,
     );
     expect(html).not.toContain("first NFT this records");
-    expect(html).toContain('<button class="btn primary" type="button">Record 1–20</button>');
+    expect(html).toContain('<button class="btn primary" type="button" data-sync="nft">Sync NFT</button>');
   });
 
   it("does not treat an unsettled perk2 pool as a first-sync capture", () => {
@@ -63,7 +65,7 @@ describe("ShareDesk", () => {
     expect(html).toContain("does not pay GNOT");
     expect(html).toContain("2.456437 GNOT");
     expect(html).not.toContain("first NFT this records");
-    expect(html).toContain('<button class="btn primary" type="button">Record 1–20</button>');
+    expect(html).toContain('<button class="btn primary" type="button" data-sync="nft">Sync NFT</button>');
     expect(html).toContain("Settle needs recorded weight");
     expect(html).toContain(">Settle<");
   });

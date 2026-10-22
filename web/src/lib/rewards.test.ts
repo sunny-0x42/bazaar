@@ -59,7 +59,7 @@ describe("holder notice", () => {
     );
     expect(line).toContain("Counted discount is 0.25% (Common)");
     expect(line).toContain("Share weight is 25");
-    expect(line).toContain("Sync writes this onto Buy");
+    expect(line).toContain("The admin wallet records this onto Buy");
     expect(line).not.toContain("Not eligible yet");
     expect(line).not.toContain("perk record");
   });

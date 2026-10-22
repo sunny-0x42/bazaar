@@ -51,6 +51,8 @@ type Props = {
   onOpenItem?: (item: Item) => void;
   onOpenCollection: (slug: string) => void;
   onOpenMint?: (slug: string) => void;
+  launchEnded?: ReadonlySet<string>;
+  launchKnown?: boolean;
   onBuy: (item: Item) => void;
   onSell?: (item: Item) => void;
   onListWallet?: (rows: { item: Item; priceUgnot: number }[]) => void;
@@ -81,6 +83,8 @@ export function Profile({
   onOpenItem,
   onOpenCollection,
   onOpenMint,
+  launchEnded,
+  launchKnown = true,
   onBuy,
   onSell,
   onListWallet,
@@ -549,7 +553,7 @@ export function Profile({
                     <button className="btn" type="button" onClick={() => onOpenCollection(col.slug)}>
                       Collection
                     </button>
-                    {(col.drop || col.maxSupply > 0) && onOpenMint ? (
+                    {(col.drop || col.maxSupply > 0) && onOpenMint && launchKnown && !launchEnded?.has(col.slug) ? (
                       <button className="btn primary" type="button" onClick={() => onOpenMint(col.slug)}>
                         Mint
                       </button>
