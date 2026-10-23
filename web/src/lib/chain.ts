@@ -902,19 +902,48 @@ export function isLiveTrade(row: Activity): boolean {
   return LIVE_TRADE_KINDS.has((row.kind || "").trim().toLowerCase());
 }
 
+const LIVE_SUPERSEDE_KINDS = new Set(["cancel", "canceloffer"]);
+
+/**
+ * One card per item. `rows` is newest first. A newer list, sale, or offer
+ * replaces the older price. A newer cancel removes the item from the tape.
+ */
+export function latestLiveRows(rows: Activity[]): Activity[] {
+  const seen = new Set<string>();
+  const out: Activity[] = [];
+  for (const row of rows) {
+    const kind = (row.kind || "").trim().toLowerCase();
+    const trade = isLiveTrade(row);
+    const drop = LIVE_SUPERSEDE_KINDS.has(kind);
+    if (!trade && !drop) continue;
+    const id = (row.id || "").trim();
+    if (!id) {
+      if (trade) out.push(row);
+      continue;
+    }
+    const slug = (row.slug || "").trim().toLowerCase();
+    const key = `${slug}:${id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (drop) continue;
+    out.push(row);
+  }
+  return out;
+}
+
 export function liveTradeRows(rows: Activity[], cap = 24): Activity[] {
-  return rows.filter(isLiveTrade).slice(0, cap);
+  return latestLiveRows(rows).slice(0, cap);
 }
 
 /**
  * Home live tape. `slugs` null keeps every trade (legacy book).
  * An array limits the tape to collections on the factory this UI is using.
+ * `rows` is newest first.
  */
 export function scopeLiveTape(rows: Activity[], slugs: string[] | null, cap = 24): Activity[] {
-  const trades = rows.filter(isLiveTrade);
-  if (slugs == null) return trades.slice(0, cap);
-  const allow = new Set(slugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean));
-  return trades.filter((row) => allow.has(row.slug.trim().toLowerCase())).slice(0, cap);
+  const allow = slugs == null ? null : new Set(slugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean));
+  const scoped = allow == null ? rows : rows.filter((row) => allow.has((row.slug || "").trim().toLowerCase()));
+  return latestLiveRows(scoped).slice(0, cap);
 }
 
 export function canAddToCart(item: Item, wallet?: string): boolean {

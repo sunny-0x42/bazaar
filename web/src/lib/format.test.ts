@@ -313,14 +313,26 @@ describe("jsonToSlotBlob", () => {
 });
 
 describe("liveTradeRows", () => {
-  it("keeps list/buy/offer and drops mint/drop", async () => {
+  it("keeps the newest price and drops a replaced 1 GNOT list", async () => {
     const { liveTradeRows } = await import("./chain");
     const rows = liveTradeRows([
-      { kind: "list", id: "1", slug: "stones", actor: "g1a", price: 1, name: "A" },
-      { kind: "mint", id: "2", slug: "stones", actor: "g1a", price: 0, name: "B" },
-      { kind: "buy", id: "1", slug: "stones", actor: "g1b", price: 1, name: "A" },
+      { kind: "list", id: "76", slug: "bazaargens", actor: "g1a", price: 400_000_000, name: "Later" },
+      { kind: "cancel", id: "76", slug: "bazaargens", actor: "g1a", price: 0, name: "Later" },
+      { kind: "list", id: "76", slug: "bazaargens", actor: "g1a", price: 1_000_000, name: "Earlier" },
+      { kind: "mint", id: "2", slug: "bazaargens", actor: "g1a", price: 0, name: "Skip" },
+      { kind: "buy", id: "3", slug: "bazaargens", actor: "g1b", price: 2_000_000, name: "Sold" },
     ]);
-    expect(rows.map((r) => r.kind)).toEqual(["list", "buy"]);
+    expect(rows.map((r) => r.name)).toEqual(["Later", "Sold"]);
+    expect(rows[0].price).toBe(400_000_000);
+  });
+
+  it("drops an item whose newest event is cancel", async () => {
+    const { liveTradeRows } = await import("./chain");
+    const rows = liveTradeRows([
+      { kind: "cancel", id: "9", slug: "bazaargens", actor: "g1a", price: 0, name: "Gone" },
+      { kind: "list", id: "9", slug: "bazaargens", actor: "g1a", price: 1_000_000, name: "Gone" },
+    ]);
+    expect(rows).toEqual([]);
   });
 
   it("keeps trades from this factory and drops older collections", async () => {
